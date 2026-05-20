@@ -35,9 +35,11 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-  <!-- Auto-detect Navisworks installation: prefers 2025, falls back to 2024 -->
+  <!-- Auto-detect Navisworks installation: prefers newest available (2027 → 2024) -->
   <PropertyGroup>
-    <NWPath Condition="Exists('C:\Program Files\Autodesk\Navisworks Manage 2025\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
+    <NWPath Condition="Exists('C:\Program Files\Autodesk\Navisworks Manage 2027\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2027\</NWPath>
+    <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2026\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2026\</NWPath>
+    <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2025\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2024\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2024\</NWPath>
     <NWPath Condition="'$(NWPath)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
   </PropertyGroup>

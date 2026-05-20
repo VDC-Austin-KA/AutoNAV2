@@ -1,74 +1,72 @@
 @echo off
-REM AutoNAV Uninstallation Script
-REM This script removes AutoNAV plugin from Navisworks Manage
+REM AutoNAV v3.0.0 — Uninstallation Script
+REM Removes AutoNAV from ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
 
 setlocal enabledelayedexpansion
 
 echo.
 echo ================================================================================
 echo                      AutoNAV v3.0.0 Uninstallation
+echo            Removes from: Navisworks Manage 2024 / 2025 / 2026 / 2027
 echo ================================================================================
 echo.
 
-REM Check for admin privileges
 openfiles >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: This script requires Administrator privileges.
-    echo Please right-click this file and select "Run as administrator"
+    echo ERROR: Administrator privileges required.
+    echo Please right-click this file and select "Run as administrator".
     pause
     exit /b 1
 )
 
-echo Detecting Navisworks installation...
+REM Close Navisworks if running
+tasklist /FI "IMAGENAME eq Navisworks*" 2>nul | find /I "Navisworks" >nul
+if not errorlevel 1 (
+    echo Closing Navisworks...
+    taskkill /F /IM "Navisworks*" >nul 2>&1
+    timeout /t 2 /nobreak >nul
+)
+
+set REMOVED_COUNT=0
+set REMOVED_VERSIONS=
+
+for %%V in (2024 2025 2026 2027) do (
+    call :TryRemove %%V
+)
+
 echo.
-
-REM Check for Navisworks 2026
-if exist "C:\ProgramData\Autodesk\Navisworks Manage 2026\Plugins" (
-    set PLUGIN_DEST=C:\ProgramData\Autodesk\Navisworks Manage 2026\Plugins
-    set NAVVERSION=2026
-    goto uninstall
+echo ================================================================================
+if !REMOVED_COUNT! gtr 0 (
+    echo  AutoNAV removed from: Navisworks !REMOVED_VERSIONS!
+) else (
+    echo  AutoNAV was not found in any Navisworks installation.
 )
-
-REM Check for Navisworks 2025
-if exist "C:\ProgramData\Autodesk\Navisworks Manage 2025\Plugins" (
-    set PLUGIN_DEST=C:\ProgramData\Autodesk\Navisworks Manage 2025\Plugins
-    set NAVVERSION=2025
-    goto uninstall
-)
-
-REM Check for Navisworks 2024
-if exist "C:\ProgramData\Autodesk\Navisworks Manage 2024\Plugins" (
-    set PLUGIN_DEST=C:\ProgramData\Autodesk\Navisworks Manage 2024\Plugins
-    set NAVVERSION=2024
-    goto uninstall
-)
-
-echo No Navisworks installation found. Nothing to uninstall.
+echo ================================================================================
+echo.
 pause
 exit /b 0
 
-:uninstall
-echo Found Navisworks Manage %NAVVERSION%
-echo Uninstalling from: %PLUGIN_DEST%
-echo.
+:TryRemove
+set "NW_VERSION=%~1"
+set "ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
+set "PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins"
+set FOUND=0
 
-REM Remove plugin files
-if exist "%PLUGIN_DEST%\AutoNAV.dll" (
-    echo Removing AutoNAV.dll...
-    del "%PLUGIN_DEST%\AutoNAV.dll" >nul 2>&1
+for %%D in ("!ADDIN_DIR!" "!PLUGIN_DIR!") do (
+    if exist "%%~D\AutoNAV.dll"   ( del /F /Q "%%~D\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
+    if exist "%%~D\AutoNAV.addin" ( del /F /Q "%%~D\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
+    if exist "%%~D\AutoNAV.pdb"   ( del /F /Q "%%~D\AutoNAV.pdb"   >nul 2>&1 )
 )
 
-if exist "%PLUGIN_DEST%\AutoNAV.addin" (
-    echo Removing AutoNAV.addin...
-    del "%PLUGIN_DEST%\AutoNAV.addin" >nul 2>&1
+if !FOUND! equ 1 (
+    echo  [+] Navisworks %NW_VERSION% — removed
+    set /a REMOVED_COUNT+=1
+    if "!REMOVED_VERSIONS!"=="" (
+        set "REMOVED_VERSIONS=%NW_VERSION%"
+    ) else (
+        set "REMOVED_VERSIONS=!REMOVED_VERSIONS!, %NW_VERSION%"
+    )
+) else (
+    echo  [--] Navisworks %NW_VERSION% — not installed, skipped
 )
-
-echo.
-echo ================================================================================
-echo                    Uninstallation Complete
-echo ================================================================================
-echo.
-echo AutoNAV has been removed from Navisworks Manage.
-echo Next Navisworks startup will not load AutoNAV.
-echo.
-pause
+goto :eof
