@@ -1,16 +1,6 @@
-# Build outputs
+# Build outputs (intermediate and debug artifacts)
 AutoNAV/bin/
 AutoNAV/obj/
-
-# Compiled artifacts (keep distributable DLL intentionally excluded below)
-*.dll
-*.pdb
-*.exe
-
-# Distributable compiled artifacts (not source)
-Distributable/*.dll
-Distributable/*.pdb
-Distributable/AutoNAV_v3.0.0/Plugin/
 
 # Archives
 *.zip

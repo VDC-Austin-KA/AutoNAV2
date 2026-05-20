@@ -2,79 +2,83 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
-
-**AutoNAV2** is an Autodesk Navisworks plugin (v3.0.0) that automates VDC (Virtual Design and Construction) coordination workflows. It is a C# .NET Framework 4.8 WPF add-in that integrates with Navisworks Manage to automate search set creation, clash test generation, and clash result grouping.
-
-## Build Commands
+## Build
 
 ```powershell
-# Release build (x64)
-msbuild AutoNAV\AutoNAV.csproj /p:Configuration=Release /p:Platform=x64
-
-# Debug build (x64)
-msbuild AutoNAV\AutoNAV.csproj /p:Configuration=Debug /p:Platform=x64
+& "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" `
+  "AutoNAV\AutoNAV.csproj" /p:Configuration=Release /p:Platform=x64 /t:Clean,Build /v:minimal
 ```
 
-Output lands in `AutoNAV\bin\Release\AutoNAV.dll` or `AutoNAV\bin\Debug\AutoNAV.dll`.
+Output lands in `AutoNAV\bin\Release\AutoNAV.dll`. After a successful build, copy the DLL (and PDB) into both distributable locations:
+- `Distributable\AutoNAV.dll`
+- `Distributable\AutoNAV_v3.0.0\Plugin\AutoNAV.dll`
 
-There are no automated tests in this codebase.
+## Plugin Architecture
 
-## Navisworks API Dependency
+AutoNAV is a Navisworks Manage add-in targeting .NET Framework 4.8 / x64 / WPF.
 
-The project auto-detects the Navisworks installation path at build time (prefers Manage 2025, falls back to 2024):
+**Entry point**: `PluginMain.cs` — decorated with `[Plugin]` and `[AddInPlugin(AddInLocation.AddIn)]`. Navisworks discovers and loads it at startup.
+
+**Main window**: `MainWindow.xaml` / `MainWindow.xaml.cs` — single WPF dialog with six numbered function sections. Each `OnFunctionNClick` handler drives one automation workflow.
+
+**Core modules**:
+| File | Responsibility |
+|---|---|
+| `SearchSetGenerator.cs` | Functions 1–3: create/update Navisworks Selection Sets |
+| `ClashTestGeneratorEngine.cs` | Function 4: generate clash tests from selection sets |
+| `ClashResultGrouper.cs` | Function 5: group clash results by element category |
+| `ClashGrouper.cs` | Function 6: group clash results by Walls/Floors per discipline |
+
+## Plugin Installation Paths
+
+Navisworks discovers third-party plugins from this directory (consistent across 2024–2027):
 
 ```
-C:\Program Files\Autodesk\Navisworks Manage 2025\
-C:\Program Files\Autodesk\Navisworks Manage 2024\
+C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 ```
 
-Key assemblies (referenced as `Private=False` — not copied to output):
-- `Autodesk.Navisworks.Api.dll`
-- `Autodesk.Navisworks.Clash.dll`
-- `Autodesk.Navisworks.ComApi.dll`
-- `Autodesk.Navisworks.Interop.ComApi.dll`
+Both `AutoNAV.dll` and `AutoNAV.addin` **must** be in the same `AutoNAV\` subfolder. The `.addin` XML references `<AssemblyFile>AutoNAV.dll</AssemblyFile>` as a relative path.
 
-## Plugin Installation
+The `AddIns\` folder under `Program Files\Autodesk\...` is an Autodesk-internal path and should not be used for third-party plugins.
 
-Copy `AutoNAV.dll` and `AutoNAV.addin` to the Navisworks plugins directory. The `.addin` file declares entry point `AutoNAV.PluginMain` and add-in metadata. The distributable package under `Distributable/` contains install/uninstall scripts.
+## Selection Set Folder Convention
 
-## Architecture
+Functions 1–3 create selection sets organized under numbered top-level folders:
+- `1. DISCIPLINE SETS` — Function 1 output (name-contains search)
+- `2. CLASH SETS` — Function 2 output (category-equals search)
+- `3. REFINED SETS` — Function 3 output
 
-### Entry Point
-`PluginMain.cs` — `[Plugin("AutoNAV", "ACLP_VDC")]` decorated `AddInPlugin` subclass. `Execute()` opens the `MainWindow` as a modal dialog.
+Function 6 (`ClashGrouper.cs`) reads discipline sets from `2. CLASH SETS` to know which model items belong to each discipline's Walls and Floors.
 
-### UI Layer
-`MainWindow.xaml` / `MainWindow.xaml.cs` — Single WPF window with all six functions exposed as button actions. Owns instances of `SearchSetGenerator` and `ClashTestGeneratorEngine`. Handles all UI event wiring and discipline checkbox panel construction.
+## Discipline Pattern Detection
 
-### Core Classes
+`SearchSetGenerator` detects discipline names from model item names using a prefix/substring approach. Function 6 (`ClashGrouper.cs`) maps "DiscA vs DiscB" clash test names to those same discipline keys to scope which Walls/Floors sets to merge for each test.
 
-**`SearchSetGenerator.cs`** — Static-heavy class responsible for Functions 1, 2, and 3:
-- **Function 1** (`GenerateFunction1SearchSets`): Reads all loaded model filenames, computes minimal unique `CONTAINS` patterns per discipline group (via `ComputeDisciplinePatterns`), and creates search sets under the `"1. DISCIPLINES"` folder in the Navisworks Selection Sets tree.
-- **Function 2** (`GenerateFunction2SearchSets`): For each discipline, enumerates unique BIM property values (e.g. `Element/Category`) from the discipline's models and creates child search sets under `"2. CLASH SETS\<Discipline>"`.
-- **Function 3** (`GenerateCustomSearchSets`): Same as Function 2 but the user picks an arbitrary property category and name from dropdowns.
+## Critical Navisworks API Pattern — Clash Grouping
 
-**`ClashTestGeneratorEngine.cs`** — Functions 4 and 5:
-- **Function 4** (`GenerateClashTests`): Reads disciplines from `"1. DISCIPLINES"` and clash set folders from `"2. CLASH SETS"`, then creates all pairwise `ClashTest` entries in Clash Detective using `SelectionSource` objects built from each discipline's search sets.
-- **Function 5** (`RunClashTestsAndGroupResults`): Runs clash tests and groups results by Walls/Floors membership.
+`TestsAddCopy(parent, group)` does **not** deep-copy an in-memory group's children. The correct pattern for adding a group with results is:
 
-**`ClashGrouper.cs`** — Function 6 and general clash result grouping:
-- **`GroupClashes`**: Groups clash results for a single test by one of 15 `GroupingMode` values (Level, GridIntersection, SelectionA/B, ModelA/B, Status, AssignedTo, ApprovedBy, File, Layer, First, Last, LastUnique, WallsAndFloors).
-- **`GroupAllTestsByWallsAndFloors`** (Function 6): Iterates all clash tests and groups each by Walls/Floors membership, leaving non-matching results ungrouped for downstream tools (Sherlock Distill).
-- Walls/Floors detection uses `Search.FindAll()` to build `HashSet<ModelItem>` for each search set (with descendants pre-expanded), then checks each clash result item for set membership — this is intentional and avoids unreliable property string matching.
+```csharp
+// 1. Add empty shell
+docClash.TestsData.TestsAddCopy(liveTest, new ClashResultGroup { DisplayName = name });
 
-**`ClashResultGrouper.cs`** — Additional grouping utilities (supplementary to `ClashGrouper`).
+// 2. Get live reference (just added, last child)
+ClashResultGroup liveGroup = null;
+for (int i = liveTest.Children.Count - 1; i >= 0; i--)
+{
+    if (liveTest.Children[i] is ClashResultGroup crg) { liveGroup = crg; break; }
+}
 
-### Selection Set Folder Convention
-The plugin operates on two top-level folders in the Navisworks Selection Sets pane:
-- `"1. DISCIPLINES"` — one `SelectionSet` per discipline (Function 1 output)
-- `"2. CLASH SETS"` — one subfolder per discipline, each containing category `SelectionSet` entries (Functions 2/3 output)
+// 3. Add items one-by-one to the live group
+foreach (SavedItem child in sourceGroup.Children)
+{
+    if (child is ClashResult cr)
+        docClash.TestsData.TestsAddCopy(liveGroup, cr);
+}
+```
 
-Functions 4–6 require both folders to exist (Functions 1–3 must be run first).
+## Branching Strategy
 
-### Discipline Pattern Algorithm (`ComputeDisciplinePatterns`)
-Parses model filenames to find the shortest separator-wrapped segment (e.g. `-MP-`) that:
-1. Appears in ALL files of a discipline group
-2. Does NOT appear in any other group's files
-
-Falls back to adjacent segment pairs, then triples, then the full discipline string. Separator is auto-detected by majority vote of `-` vs `_` across all filenames. Level codes (e.g. `L06`, `B01`, `RF01`) are filtered out during grouping.
+- `main` — stable, released builds only
+- `feature/*` — active development; merge to main when verified working
+- Current active branch: `feature/fix-function6-grouping`

@@ -15,44 +15,45 @@ Type:                   Navisworks Plugin (.NET 4.8)
 
 WHAT'S NEW IN v3.0.0:
 
-✓ Full Navisworks Manage 2025 support
-✓ Automated installer with admin detection
-✓ PowerShell-based installation engine (FIXED and TESTED)
-✓ Batch file launcher for ease of use
-✓ Automatic Navisworks process management
-✓ Backup and restore functionality
-✓ Silent installation mode
-✓ Comprehensive error handling
-✓ Colorized installer output
-✓ Multi-language ready installer
-✓ Complete documentation package
-✓ Installer fully tested and verified (May 20, 2026)
++ Full support for Navisworks Manage 2024, 2025, 2026, and 2027
++ Single installer detects and installs to all versions simultaneously
++ Correct plugin path: C:\ProgramData\...\Plugins\AutoNAV\ (per Navisworks spec)
++ PowerShell-based installation engine with error handling
++ Batch file launcher for ease of use
++ Automatic Navisworks process management (closes before installing)
++ Backup/restore functionality (timestamped backup on upgrade)
++ Silent installation mode (-Silent flag)
++ Uninstall support (-Uninstall flag, removes from all versions)
++ Colorized installer output
++ Comprehensive documentation package
 
 ================================================================================
 
 COMPATIBILITY:
 
 SUPPORTED VERSIONS:
-✓ Navisworks Manage 2025
-✓ Navisworks Manage 2024
+  + Navisworks Manage 2024
+  + Navisworks Manage 2025
+  + Navisworks Manage 2026
+  + Navisworks Manage 2027
 
 OPERATING SYSTEMS:
-✓ Windows 10 (Build 19041+)
-✓ Windows 11
+  + Windows 10 (Build 19041+)
+  + Windows 11
 
 ARCHITECTURE:
-✓ x64 (64-bit systems)
-✗ x86 (32-bit systems) - NOT supported
+  + x64 (64-bit systems only)
+  - x86 (32-bit systems) - NOT supported
 
 .NET FRAMEWORK:
-✓ .NET Framework 4.8
-✓ .NET Framework 4.8.1 or later
+  + .NET Framework 4.8
+  + .NET Framework 4.8.1 or later
 
 NOT COMPATIBLE WITH:
-✗ Navisworks Simulate 2025
-✗ Navisworks Freedom 2025
-✗ Earlier versions (2023, 2022, etc.)
-✗ 32-bit Navisworks installations
+  - Navisworks Simulate
+  - Navisworks Freedom
+  - Navisworks 2023 or older
+  - 32-bit Navisworks installations
 
 ================================================================================
 
@@ -60,43 +61,29 @@ SYSTEM REQUIREMENTS:
 
 Minimum:
 - Windows 10 (Build 19041) or Windows 11
-- Navisworks Manage 2024/2025
+- Navisworks Manage 2024, 2025, 2026, or 2027
 - .NET Framework 4.8
 - 8 GB RAM
-- 500 MB disk space
+- ~10 MB disk space per version
 - Administrator access
 
 Recommended:
 - Windows 11
-- Navisworks Manage 2025 (latest)
+- Navisworks Manage 2025 or 2026
 - .NET Framework 4.8.1 or later
 - 16 GB+ RAM
 - SSD storage
-- Stable network connection (for licensing)
 
 ================================================================================
 
-INSTALLATION CHANGES:
+PLUGIN INSTALLATION PATH:
 
-This version includes significant installer improvements:
+AutoNAV installs to the correct Navisworks third-party plugin location:
 
-FROM PREVIOUS VERSIONS:
-- Manual file copying
-- No automated detection
-- Basic batch script
-- No backup capability
+  C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 
-TO v3.0.0:
-+ Fully automated installer
-+ Automatic Navisworks detection
-+ PowerShell engine with error handling
-+ Process management (closes Navisworks)
-+ Backup/restore functionality
-+ Silent mode for deployments
-+ Administrator privilege verification
-+ Comprehensive logging
-+ Colorized output
-+ File integrity checking
+Both AutoNAV.dll and AutoNAV.addin are placed in the same AutoNAV\ subfolder.
+Navisworks discovers the plugin from this path consistently across all versions.
 
 ================================================================================
 
@@ -104,107 +91,42 @@ KNOWN ISSUES:
 
 None reported in this release.
 
-If you encounter any issues:
+If you encounter issues:
 1. Check INSTALLATION_GUIDE.md troubleshooting section
 2. Verify system requirements are met
-3. Ensure .NET Framework 4.8 is installed
-4. Disable antivirus temporarily (if safe)
-5. Try manual installation method
-
-================================================================================
-
-RESOLVED ISSUES:
-
-From previous versions:
-- Fixed: Plugin not loading on first install
-- Fixed: Permission errors during installation
-- Fixed: Navisworks not closing properly
-- Fixed: AddIns folder creation failures
-- Fixed: Missing error messages
+3. Ensure both AutoNAV.dll and AutoNAV.addin are in the same AutoNAV\ subfolder
+4. Ensure .NET Framework 4.8 is installed
 
 ================================================================================
 
 UPGRADE PATH:
 
-FROM v2.x TO v3.0.0:
+FROM ANY PREVIOUS VERSION:
 
 The installer automatically:
 1. Detects previous installation
-2. Creates timestamped backup
-3. Preserves user settings (if applicable)
-4. Installs new version
-5. Verifies installation
+2. Creates timestamped backup in the same AutoNAV\ folder
+3. Installs new version
+4. Verifies installation
 
 No additional steps needed. Simply run the installer.
 
 Backup location:
-C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
-  └── AutoNAV_Backup_[YYYYMMDD_HHMMSS]\
+  C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
+    Backup_YYYYMMDD_HHMMSS\
+      AutoNAV.dll
+      AutoNAV.addin
 
 ================================================================================
 
-DEPLOYMENT INFORMATION:
+SILENT DEPLOYMENT:
 
-For IT Administrators:
+For IT administrators:
 
-Silent Installation:
-powershell.exe -NoProfile -ExecutionPolicy Bypass ^
-  -Command "& 'path\to\Install-AutoNAV.ps1' -Silent"
+  powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File "path\to\Install-AutoNAV.ps1" -Silent
 
-Group Policy Deployment:
-Can be deployed via Group Policy startup scripts
-
-Network Deployment:
-Place installer on network share and run from there
-
-License Considerations:
-AutoNAV is provided as-is for internal use
-Each user needs their own Navisworks license
-
-================================================================================
-
-PERFORMANCE METRICS:
-
-Installation Time:
-- Typical: 5-15 seconds
-- First time (with detection): 10-20 seconds
-
-File Sizes:
-- AutoNAV.dll: 94 KB
-- AutoNAV.addin: 381 bytes
-- AutoNAV.pdb: 172 KB
-- Install scripts: ~14 KB
-- Total: ~278 KB
-
-Memory Usage:
-- When loaded in Navisworks: ~50-100 MB
-- Plugin processes: Native code with managed wrappers
-
-Disk Space:
-- Installation: ~270 KB
-- With backups: ~540 KB
-- Temporary files: Cleaned after installation
-
-================================================================================
-
-SECURITY INFORMATION:
-
-Permissions:
-- Requires Administrator access to install
-- Regular users can run plugin after installation
-- Plugin integrates with Navisworks security model
-
-Code Signing:
-- Plugin compiled with .NET Framework 4.8
-- No external dependencies
-- No network access required
-- No auto-update features
-
-Data Privacy:
-- Plugin operates locally only
-- No data transmission
-- No telemetry
-- No tracking
+Installs to all Navisworks versions found, no prompts.
 
 ================================================================================
 
@@ -213,201 +135,35 @@ TECHNICAL DETAILS:
 Architecture:
 - Language: C#
 - Framework: .NET Framework 4.8
-- Platform: x64 Native Code
+- Platform: x64
 - UI Framework: WPF (Windows Presentation Foundation)
+- Plugin API: Navisworks Manage API (Autodesk.Navisworks.Api)
 
 Dependencies:
-- System assemblies (provided by .NET 4.8)
-- Navisworks API (provided by Navisworks)
-- Windows Base Libraries
-- Presentation Framework
-
-Compiled For:
-- Navisworks 2025 primary target
-- Navisworks 2024 fallback support
-- Windows 10/11 compatibility
-
-No External NuGet Packages:
-- Self-contained
-- No runtime package dependencies
-- No DLL hell issues
-- Easy to distribute
-
-================================================================================
-
-MIGRATION NOTES:
-
-If upgrading from previous version:
-
-1. Old version backup is created automatically
-2. Settings are preserved (plugin-dependent)
-3. Restart Navisworks after upgrade
-4. Check ribbon UI for AutoNAV button
-
-To revert to previous version:
-1. Close Navisworks
-2. Copy files from AutoNAV_Backup_[timestamp] folder
-3. Overwrite current installation
-4. Restart Navisworks
-
-================================================================================
-
-DOCUMENTATION:
-
-Included Files:
-✓ README.txt - Quick start guide
-✓ INSTALLATION_GUIDE.md - Detailed installation manual
-✓ PACKAGE_CONTENTS.txt - Package file descriptions
-✓ VERSION_NOTES.txt - This file
-✓ Install-AutoNAV.bat - Batch installer
-✓ Install-AutoNAV.ps1 - PowerShell installer
-
-Additional Resources:
-- Navisworks 2025 Documentation
-- .NET Framework 4.8 Documentation
-- Windows Administrator Guide
-
-================================================================================
-
-SUPPORT & FEEDBACK:
-
-Issues or Questions:
-1. Check troubleshooting in INSTALLATION_GUIDE.md
-2. Verify system meets requirements
-3. Try manual installation method
-4. Contact your IT department
-
-Bug Reports:
-- Include version number (v3.0.0)
-- Include Windows version
-- Include Navisworks version
-- Describe steps to reproduce
-
-Feature Requests:
-- Contact plugin developer
-- Provide use case description
-- Explain business need
-
-================================================================================
-
-FUTURE ROADMAP:
-
-Planned for Future Releases:
-- Navisworks 2026 support
-- Enhanced UI customization
-- Plugin settings/preferences dialog
-- Batch processing capabilities
-- Additional report formats
-- Performance optimizations
-
-Current Limitations:
-- Single user installation
-- No network shared settings
-- Requires local admin access
-- No cloud storage integration
-
-================================================================================
-
-LICENSE INFORMATION:
-
-AutoNAV is provided for use with:
-✓ Licensed Autodesk Navisworks Manage 2025/2024
-✓ Internal corporate use
-✓ Authorized users only
-
-Restrictions:
-✗ Cannot be sold or redistributed
-✗ Cannot be modified without permission
-✗ Cannot be used with unlicensed Navisworks
-✗ Cannot bypass Navisworks licensing
-
-For licensing questions, contact your organization's software licensing team.
+- System assemblies (.NET 4.8)
+- Navisworks API (provided by Navisworks at runtime)
+- No external NuGet packages
+- No network access required
 
 ================================================================================
 
 REVISION HISTORY:
 
 v3.0.0 (May 20, 2026) - Current Release
-   - Initial production release
-   - Full Navisworks 2025 support
-   - Automated installer
-   - PowerShell backend
-   - Comprehensive documentation
-   - Backup/restore functionality
+   - Multi-version support: 2024, 2025, 2026, 2027
+   - Correct Plugins\AutoNAV\ install path
+   - Automated installer with backup/restore
+   - Function 6 grouping fix (Walls/Floors per discipline)
 
 v2.x (Previous)
    - Legacy version (no longer supported)
-   - Manual installation required
-   - Basic functionality
 
 v1.x (Deprecated)
-   - Original version (not compatible with 2025)
-
-================================================================================
-
-CHECKSUMS & VERIFICATION:
-
-To verify package integrity:
-
-File Sizes (should match):
-- AutoNAV.dll: 94,256 bytes (94 KB)
-- AutoNAV.addin: 381 bytes
-- AutoNAV.pdb: 176,128 bytes (172 KB)
-
-Verify by:
-1. Right-click file
-2. Select Properties
-3. Check "Size" matches above
-
-Install Scripts:
-- Install-AutoNAV.ps1: ~12 KB
-- Install-AutoNAV.bat: ~2 KB
-
-Total Package: ~278 KB (uncompressed)
-
-================================================================================
-
-VERSION MAINTENANCE:
-
-Support Timeline:
-- v3.0.0: Until Navisworks 2026 release
-- v2.x: No longer supported
-- v1.x: No longer supported
-
-Updates:
-- Critical security fixes: Released immediately
-- Bug fixes: Released in maintenance updates
-- Features: Released in major versions
-
-Update Method:
-- Download latest installer
-- Run installer (automatically backs up old version)
-- Restart Navisworks
-
-================================================================================
-
-CONTACT & RESOURCES:
-
-Questions About Installation:
-- See INSTALLATION_GUIDE.md
-- See README.txt
-
-Questions About AutoNAV Features:
-- See AutoNAV documentation in Navisworks
-- Contact plugin developer
-
-Navisworks Support:
-- Autodesk Support Portal: https://support.autodesk.com
-- Navisworks 2025 Help: https://help.autodesk.com/view/NWM/2025/ENU/
-
-.NET Framework:
-- Microsoft Download: https://dotnet.microsoft.com/en-us/download/dotnet-framework
+   - Original version (not compatible with current API)
 
 ================================================================================
 
 Document Version: 3.0.0
 Last Updated: May 20, 2026
-Status: Current
-Next Review: When v3.1 is released
 
 ================================================================================
