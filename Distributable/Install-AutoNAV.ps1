@@ -1,8 +1,7 @@
 ################################################################################
 # AutoNAV Installer Script
 # Version: 3.0.0
-# Description: Installs AutoNAV plugin to all detected Navisworks Manage versions
-#              (2024, 2025, 2026, 2027)
+# Installs AutoNAV to all detected Navisworks Manage versions (2024-2027)
 # Author: Keith Acker
 ################################################################################
 
@@ -44,7 +43,6 @@ function Get-NavisworksAddinPath {
         "C:\Program Files (x86)\Autodesk\Navisworks Manage $Version\AddIns"
     )
     foreach ($p in $candidates) {
-        # Return path if parent Navisworks folder exists (AddIns may not yet exist)
         if (Test-Path (Split-Path $p -Parent)) { return $p }
     }
     return $null
@@ -66,9 +64,8 @@ function Install-ToVersion {
     $addinTarget = Join-Path $addinPath "AutoNAV.addin"
     $pdbTarget   = Join-Path $addinPath "AutoNAV.pdb"
 
-    # Backup existing files
     if ((Test-Path $dllTarget) -or (Test-Path $addinTarget)) {
-        $backupPath = Join-Path $addinPath "AutoNAV_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+        $backupPath = Join-Path $addinPath ("AutoNAV_Backup_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
         New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
         if (Test-Path $dllTarget)   { Copy-Item $dllTarget   $backupPath -Force }
         if (Test-Path $addinTarget) { Copy-Item $addinTarget $backupPath -Force }
@@ -80,7 +77,7 @@ function Install-ToVersion {
     if (Test-Path $PdbFile) { Copy-Item $PdbFile $pdbTarget -Force }
 
     $size = [math]::Round((Get-Item $dllTarget).Length / 1KB, 1)
-    Write-ColorOutput "  [+] Navisworks $Version — installed ($size KB) → $addinPath" -Type Success
+    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- installed (" + $size + " KB) -> " + $addinPath) -Type Success
     return $true
 }
 
@@ -101,13 +98,13 @@ function Uninstall-FromVersion {
     if (Test-Path $addinTarget) { Remove-Item $addinTarget -Force }
     if (Test-Path $pdbTarget)   { Remove-Item $pdbTarget   -Force }
 
-    Write-ColorOutput "  [+] Navisworks $Version — removed" -Type Success
+    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- removed") -Type Success
     return $true
 }
 
 function Install-AutoNAV {
     Write-ColorOutput "`n========================================" -Type Info
-    Write-ColorOutput "  AutoNAV Installation  —  v3.0.0" -Type Info
+    Write-ColorOutput "  AutoNAV Installation  --  v3.0.0" -Type Info
     Write-ColorOutput "  Supports: Navisworks 2024 / 2025 / 2026 / 2027" -Type Info
     Write-ColorOutput "========================================`n" -Type Info
 
@@ -117,7 +114,6 @@ function Install-AutoNAV {
         exit 1
     }
 
-    # Locate installer files (same folder as this script)
     $scriptPath = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
     $dllFile    = Join-Path $scriptPath "AutoNAV.dll"
     $addinFile  = Join-Path $scriptPath "AutoNAV.addin"
@@ -127,12 +123,11 @@ function Install-AutoNAV {
     if (-not (Test-Path $dllFile))   { $missing += "AutoNAV.dll" }
     if (-not (Test-Path $addinFile)) { $missing += "AutoNAV.addin" }
     if ($missing.Count -gt 0) {
-        Write-ColorOutput "ERROR: Missing files: $($missing -join ', ')" -Type Error
+        Write-ColorOutput ("ERROR: Missing files: " + ($missing -join ', ')) -Type Error
         exit 1
     }
     Write-ColorOutput "[+] Installer files found`n" -Type Success
 
-    # Close Navisworks if running
     $nwProc = Get-Process -Name "*Navisworks*" -ErrorAction SilentlyContinue
     if ($nwProc) {
         Write-ColorOutput "Closing Navisworks..." -Type Warning
@@ -146,7 +141,6 @@ function Install-AutoNAV {
         }
     }
 
-    # Install to every detected version
     $installed = @()
     $skipped   = @()
 
@@ -155,21 +149,21 @@ function Install-AutoNAV {
             $ok = Install-ToVersion -Version $ver -DllFile $dllFile -AddinFile $addinFile -PdbFile $pdbFile
             if ($ok) { $installed += $ver } else { $skipped += $ver }
         } catch {
-            Write-ColorOutput "  [!] Navisworks $ver — error: $_" -Type Error
+            Write-ColorOutput ("  [!] Navisworks " + $ver + " -- error: " + $_) -Type Error
         }
     }
 
     Write-ColorOutput "`n========================================" -Type Info
     if ($installed.Count -gt 0) {
-        Write-ColorOutput "Installed to: Navisworks $($installed -join ', ')" -Type Success
+        Write-ColorOutput ("Installed to: Navisworks " + ($installed -join ', ')) -Type Success
     }
     if ($skipped.Count -gt 0) {
-        Write-ColorOutput "Not found (skipped): $($skipped -join ', ')" -Type Warning
+        Write-ColorOutput ("Not found (skipped): " + ($skipped -join ', ')) -Type Warning
     }
 
     if ($installed.Count -eq 0) {
         Write-ColorOutput "`nERROR: No compatible Navisworks installation found." -Type Error
-        Write-ColorOutput "Install Navisworks Manage 2024–2027 before running this installer." -Type Warning
+        Write-ColorOutput "Install Navisworks Manage 2024, 2025, 2026, or 2027 and try again." -Type Warning
         exit 1
     }
 
@@ -202,22 +196,21 @@ function Uninstall-AutoNAV {
             $ok = Uninstall-FromVersion -Version $ver
             if ($ok) { $removed += $ver }
         } catch {
-            Write-ColorOutput "  [!] Navisworks $ver — error: $_" -Type Error
+            Write-ColorOutput ("  [!] Navisworks " + $ver + " -- error: " + $_) -Type Error
         }
     }
 
     if ($removed.Count -gt 0) {
-        Write-ColorOutput "`n[+] Removed from: Navisworks $($removed -join ', ')" -Type Success
+        Write-ColorOutput ("`n[+] Removed from: Navisworks " + ($removed -join ', ')) -Type Success
     } else {
         Write-ColorOutput "`nAutoNAV was not found in any Navisworks installation." -Type Warning
     }
     Write-ColorOutput "========================================`n" -Type Info
 }
 
-# Entry point
 try {
     if ($Uninstall) { Uninstall-AutoNAV } else { Install-AutoNAV }
 } catch {
-    Write-ColorOutput "ERROR: $_" -Type Error
+    Write-ColorOutput ("ERROR: " + $_) -Type Error
     exit 1
 }
