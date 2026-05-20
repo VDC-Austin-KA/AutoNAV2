@@ -7,142 +7,65 @@
 OVERVIEW:
 
 This package contains everything needed to install the AutoNAV plugin into
-Navisworks Manage 2025 or 2024. The installation process is fully automated.
+Navisworks Manage 2024, 2025, 2026, or 2027. The installation is fully
+automated and detects all installed versions at once.
 
 ================================================================================
 
 FILE STRUCTURE:
 
 AutoNAV-Installer-v3.0.0/
-│
-├── Install-AutoNAV.bat              [MAIN INSTALLER - Run this first!]
-│   └── Double-click to install
-│   └── Requires: Administrator privileges
-│   └── Best for: Most users
-│
-├── Install-AutoNAV.ps1              [PowerShell Installer Script]
-│   └── Run from PowerShell as Administrator
-│   └── Best for: Advanced users / batch deployment
-│
-├── AutoNAV.dll                      [Plugin Executable - 94 KB]
-│   └── The main AutoNAV plugin compiled for .NET 4.8
-│   └── Architecture: x64 (64-bit)
-│   └── Target: Navisworks 2025
-│
-├── AutoNAV.addin                    [Plugin Manifest - 381 B]
-│   └── Configuration file for Navisworks plugin loading
-│   └── Tells Navisworks how to load AutoNAV.dll
-│
-├── AutoNAV.pdb                      [Debug Symbols - 176 KB]
-│   └── Optional: Helps with troubleshooting and debugging
-│   └── Can be safely deleted if space is a concern
-│
-├── README.txt                       [Quick Start Guide - This file's companion]
-│   └── Quick reference for installation steps
-│   └── Basic troubleshooting
-│   └── System requirements
-│
-├── INSTALLATION_GUIDE.md            [Detailed Installation Documentation]
-│   └── Comprehensive installation instructions
-│   └── Multiple installation methods explained
-│   └── Detailed troubleshooting section
-│   └── Uninstallation instructions
-│
-├── PACKAGE_CONTENTS.txt             [This file]
-│   └── Describes what's in the package
-│   └── File purposes and locations
-│
-└── VERSION_NOTES.txt                [Release Information]
-    └── What's new in v3.0.0
-    └── Compatibility information
-    └── Known issues (if any)
+|
++-- Install-AutoNAV.bat              [MAIN INSTALLER - Run this first!]
+|   +-- Right-click -> Run as administrator
+|   +-- Installs to all Navisworks versions found (2024-2027)
+|   +-- Best for: All users
+|
++-- Install-AutoNAV.ps1              [PowerShell Installer Script]
+|   +-- Run from PowerShell as Administrator
+|   +-- Supports -Uninstall to remove from all versions
+|   +-- Best for: Advanced users / scripted deployment
+|
++-- AutoNAV.dll                      [Plugin Executable - ~94 KB]
+|   +-- The main AutoNAV plugin compiled for .NET 4.8
+|   +-- Architecture: x64 (64-bit)
+|
++-- AutoNAV.addin                    [Plugin Manifest - ~381 B]
+|   +-- XML configuration for Navisworks plugin loading
+|   +-- References AutoNAV.dll by relative path
+|   +-- Must be in the same folder as AutoNAV.dll
+|
++-- AutoNAV.pdb                      [Debug Symbols - ~172 KB]
+|   +-- Optional; helps with troubleshooting
+|
++-- README.txt
++-- START_HERE.txt
++-- QUICK_INSTALL_GUIDE.txt
++-- INSTALLATION_GUIDE.md
++-- INSTALLER_CHECKLIST.txt
++-- PACKAGE_CONTENTS.txt             [This file]
++-- VERSION_NOTES.txt
 
 ================================================================================
 
-FILE DETAILS:
+INSTALL LOCATION (after successful installation):
 
-1. Install-AutoNAV.bat (2 KB)
-   Purpose: User-friendly batch script launcher
-   How to use: Double-click as Administrator
-   Runs: Install-AutoNAV.ps1 with proper settings
-   Features:
-   - Automatic admin privilege checking
-   - Error handling
-   - User-friendly messages
-   - Automatic PowerShell execution
+For each Navisworks version found:
 
-2. Install-AutoNAV.ps1 (12 KB)
-   Purpose: Main installation engine
-   How to use: Run from PowerShell as Administrator
-   Features:
-   - Automatic Navisworks detection
-   - Plugin directory creation
-   - File verification
-   - Backup creation
-   - Process management (closes Navisworks if needed)
-   - Colorized output
-   - Silent mode support (-Silent parameter)
-   - Uninstall support (-Uninstall parameter)
+  C:\ProgramData\Autodesk\Navisworks Manage 2024\Plugins\AutoNAV\
+    AutoNAV.dll
+    AutoNAV.addin
+    AutoNAV.pdb
 
-3. AutoNAV.dll (94 KB)
-   Purpose: The actual AutoNAV plugin executable
-   Type: .NET Framework 4.8 assembly
-   Architecture: x64 (64-bit)
-   Location after install: C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
-   Functions: Contains all AutoNAV features and UI
+  C:\ProgramData\Autodesk\Navisworks Manage 2025\Plugins\AutoNAV\
+    AutoNAV.dll
+    AutoNAV.addin
+    AutoNAV.pdb
 
-4. AutoNAV.addin (381 bytes)
-   Purpose: XML manifest file for plugin registration
-   Content: Tells Navisworks to load AutoNAV.dll
-   Example content:
-   ```xml
-   <Addin Version="1.0">
-     <CompanyName>Keith Acker</CompanyName>
-     <AddInName>AutoNAV</AddInName>
-     <AddInDescription>AutoNAV - Automated Design Coordination for Navisworks</AddInDescription>
-     <AddInVersion>3.0.0.0</AddInVersion>
-     <FullClassName>AutoNAV.PluginMain</FullClassName>
-     <AssemblyFile>AutoNAV.dll</AssemblyFile>
-   </Addin>
-   ```
+  (same pattern for 2026 and 2027)
 
-5. AutoNAV.pdb (176 KB)
-   Purpose: Program Database - debug symbols
-   Optional: Yes, can be deleted to save space
-   Use: Helps with error reporting and debugging
-   Location after install: C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
-
-6. README.txt (Quick reference)
-   Purpose: Quick start guide
-   Contains:
-   - Installation steps
-   - System requirements
-   - Troubleshooting basics
-   - File listing
-   - Version information
-
-7. INSTALLATION_GUIDE.md (Detailed guide)
-   Purpose: Comprehensive installation documentation
-   Contains:
-   - Multiple installation methods
-   - Verification steps
-   - Detailed troubleshooting
-   - Uninstallation procedures
-   - File locations reference
-   - System requirements detail
-   - Support information
-
-8. PACKAGE_CONTENTS.txt (This file)
-   Purpose: Describe package contents
-   Helps: Understand what files do and where they go
-
-9. VERSION_NOTES.txt
-   Purpose: Release information
-   Contains:
-   - What's new in this version
-   - Compatibility info
-   - Known issues
-   - Migration notes (if applicable)
+IMPORTANT: Both AutoNAV.dll and AutoNAV.addin must always be in the same
+AutoNAV\ subfolder. The .addin manifest references the DLL by relative path.
 
 ================================================================================
 
@@ -151,157 +74,51 @@ INSTALLATION SUMMARY:
 The installer performs these steps automatically:
 
 Step 1: Verify Administrator Privileges
-   → Ensures user has required permissions
-
-Step 2: Locate Navisworks Installation
-   → Searches for Navisworks 2025 or 2024
-   → Checks standard installation paths
-   
-Step 3: Create/Verify AddIns Directory
-   → Creates folder if it doesn't exist
-   → Sets proper permissions
-
-Step 4: Verify Installation Files
-   → Checks all required files are present
-   → Reports if any files are missing
-
-Step 5: Backup Existing Installation (if needed)
-   → Creates timestamped backup folder
-   → Preserves previous version
-
-Step 6: Close Running Navisworks
-   → Gently closes Navisworks if running
-   → Prevents file locking issues
-
-Step 7: Copy Plugin Files
-   → AutoNAV.dll → AddIns folder
-   → AutoNAV.addin → AddIns folder
-   → AutoNAV.pdb → AddIns folder (if present)
-
-Step 8: Verify Installation
-   → Confirms files are in correct location
-   → Reports success or failure
-
-Step 9: Display Success Message
-   → Shows installation completion
-   → Provides next steps
+Step 2: Find each installed version of Navisworks Manage (2024/2025/2026/2027)
+Step 3: Create C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
+Step 4: Verify all required source files are present
+Step 5: Backup existing AutoNAV installation (if any)
+Step 6: Close running Navisworks processes
+Step 7: Copy AutoNAV.dll, AutoNAV.addin, AutoNAV.pdb to AutoNAV\ subfolder
+Step 8: Report which versions were installed vs. skipped
 
 ================================================================================
 
-POST-INSTALLATION:
+MANUAL INSTALLATION:
 
-After successful installation:
+To manually install for a specific version:
 
-1. AutoNAV files are located at:
-   C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
+1. Create this folder (example for 2025):
+   C:\ProgramData\Autodesk\Navisworks Manage 2025\Plugins\AutoNAV\
 
-2. Navisworks will automatically load AutoNAV on next launch
+2. Copy into that AutoNAV\ subfolder:
+   - AutoNAV.dll
+   - AutoNAV.addin
 
-3. Users will see AutoNAV in the "Add-Ins" ribbon tab
+3. Launch Navisworks Manage 2025
+4. AutoNAV appears in the Add-Ins ribbon
 
-4. Click AutoNAV button to open the plugin interface
-
-================================================================================
-
-SYSTEM REQUIREMENTS VERIFICATION:
-
-Before running installer, verify:
-
-✓ Windows 10 or Windows 11 (32-bit or 64-bit Windows, 64-bit app)
-✓ Navisworks Manage 2025 or 2024 installed
-✓ .NET Framework 4.8 or later installed
-✓ Administrator account or UAC privileges
-✓ At least 500 MB free disk space
-✓ Internet connection (optional, for downloading .NET if needed)
-
-To check .NET Framework version:
-1. Open Control Panel
-2. Go to Programs > Programs and Features
-3. Look for ".NET Framework 4.8" in the list
-
-To check Windows version:
-1. Press Windows Key + Pause/Break
-2. Check "System" window for OS version
-
-================================================================================
-
-TROUBLESHOOTING QUICK REFERENCE:
-
-Issue: "Administrator privileges required"
-→ Right-click Install-AutoNAV.bat, select "Run as administrator"
-
-Issue: Navisworks not detected
-→ Install Navisworks Manage 2025
-→ Check installation path is standard
-
-Issue: AutoNAV doesn't appear in Navisworks
-→ Close Navisworks completely
-→ Run installer again
-→ Restart Navisworks
-
-Issue: Permission denied errors
-→ Close Navisworks completely
-→ Run installer as Administrator
-→ Disable antivirus temporarily
-→ Check file permissions in AddIns folder
-
-Issue: ".NET Framework 4.8 not found"
-→ Download and install from:
-   https://dotnet.microsoft.com/en-us/download/dotnet-framework
-
-See INSTALLATION_GUIDE.md for more detailed troubleshooting.
+Repeat for each Navisworks version you want to install to.
 
 ================================================================================
 
 UNINSTALLATION:
 
-To uninstall AutoNAV:
+Option 1 - PowerShell (cleans all versions):
+  Run as Administrator: .\Install-AutoNAV.ps1 -Uninstall
 
-Option 1: Using PowerShell
-   Open PowerShell as Administrator
-   Navigate to installer folder
-   Run: .\Install-AutoNAV.ps1 -Uninstall
-
-Option 2: Manual
-   Close Navisworks completely
-   Delete from: C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
-   - AutoNAV.dll
-   - AutoNAV.addin
-   - AutoNAV.pdb
-
-Option 3: Restore Backup
-   If a backup was created:
-   - Navigate to AutoNAV_Backup_[timestamp] folder in AddIns
-   - Copy files back to parent AddIns folder
-   - Overwrite when prompted
+Option 2 - Manual (one version at a time):
+  Delete the AutoNAV\ subfolder from:
+  C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 
 ================================================================================
 
-DEPLOYMENT NOTES:
+SYSTEM REQUIREMENTS:
 
-For IT departments deploying to multiple users:
-
-1. Extract package to shared network folder
-2. Run: .\Install-AutoNAV.ps1 -Silent
-3. Or use Group Policy to deploy
-
-Silent installation script example:
-   powershell.exe -NoProfile -ExecutionPolicy Bypass ^
-     -Command "& 'C:\path\to\Install-AutoNAV.ps1' -Silent"
-
-================================================================================
-
-SUPPORT RESOURCES:
-
-For additional help:
-1. Read INSTALLATION_GUIDE.md (comprehensive)
-2. Check README.txt (quick reference)
-3. Review troubleshooting section above
-4. Contact your IT department
-5. Check Navisworks documentation
-
-Navisworks 2025 Help: https://help.autodesk.com/view/NWM/2025/ENU/
-.NET Framework: https://dotnet.microsoft.com/en-us/download/dotnet-framework
+  [x] Windows 10 or Windows 11 (64-bit)
+  [x] Navisworks Manage 2024, 2025, 2026, or 2027
+  [x] .NET Framework 4.8 or later
+  [x] Administrator account access for installation
 
 ================================================================================
 
@@ -310,27 +127,9 @@ VERSION INFORMATION:
 Plugin Name:        AutoNAV
 Version:            3.0.0
 Release Date:       May 2026
-Status:             Production Ready
-Compatibility:      Navisworks 2025, 2024
+Compatibility:      Navisworks Manage 2024 / 2025 / 2026 / 2027
 Framework:          .NET Framework 4.8
 Architecture:       x64 (64-bit)
 Author:             Keith Acker
-Installation Type:  Automated installer
 
-================================================================================
-
-CHECKSUM / VERIFICATION:
-
-AutoNAV.dll       94,256 bytes    (94 KB)
-AutoNAV.addin       381 bytes
-AutoNAV.pdb     176,128 bytes   (172 KB)
-Install-AutoNAV.ps1  ~12 KB
-Install-AutoNAV.bat   ~2 KB
-
-Total package size: ~278 KB (uncompressed)
-
-================================================================================
-
-Last Updated: May 20, 2026
-Package Version: 3.0.0
 ================================================================================

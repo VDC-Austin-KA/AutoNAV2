@@ -8,7 +8,7 @@ WHAT TO DO RIGHT NOW:
 1. Right-click "Install-AutoNAV.bat"
 2. Select "Run as administrator"
 3. Wait 10-20 seconds
-4. See "Installation Completed Successfully!" message
+4. Installer installs to all Navisworks versions found (2024/2025/2026/2027)
 5. Restart Navisworks
 6. Done! AutoNAV will appear in the Add-Ins tab
 
@@ -17,34 +17,35 @@ WHAT TO DO RIGHT NOW:
 WHAT IF SOMETHING GOES WRONG?
 
 Issue: "Administrator privileges required"
-→ Right-click file, select "Run as administrator"
+-> Right-click file, select "Run as administrator"
 
-Issue: "Navisworks not found"
-→ Install Navisworks Manage 2025 first
+Issue: "No compatible Navisworks installation found"
+-> Install Navisworks Manage 2024, 2025, 2026, or 2027 first
 
 Issue: AutoNAV doesn't appear
-→ Close Navisworks completely, run installer again, restart Navisworks
+-> Close Navisworks completely, run installer again, restart Navisworks
 
 For more help: Open README.txt
 
 ================================================================================
 
-WHAT GETS INSTALLED:
+WHAT GETS INSTALLED (per Navisworks version):
 
-- AutoNAV.dll (the plugin)
+- AutoNAV.dll   (the plugin)
 - AutoNAV.addin (plugin configuration)
-- AutoNAV.pdb (debug info)
+- AutoNAV.pdb   (debug info)
 
-Location: C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
+Install location for each version:
+  C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 
 ================================================================================
 
 SYSTEM REQUIREMENTS:
 
-✓ Windows 10 or 11
-✓ Navisworks Manage 2025 or 2024
-✓ .NET Framework 4.8
-✓ Administrator access
+[x] Windows 10 or 11
+[x] Navisworks Manage 2024, 2025, 2026, or 2027
+[x] .NET Framework 4.8
+[x] Administrator access
 
 ================================================================================
 
@@ -71,7 +72,6 @@ THAT'S IT!
 
 Questions? Read README.txt
 Need more details? Read INSTALLATION_GUIDE.md
-Want to understand everything? Read START_HERE.txt
 
 Then run Install-AutoNAV.bat!
 
