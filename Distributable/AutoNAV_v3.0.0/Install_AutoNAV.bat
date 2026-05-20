@@ -1,6 +1,7 @@
 @echo off
-REM AutoNAV v3.0.0 — Installation Script
+REM AutoNAV v3.0.0 - Installation Script
 REM Installs to ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
+REM Plugin path: C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 
 setlocal enabledelayedexpansion
 
@@ -25,6 +26,13 @@ set "PLUGIN_SOURCE=%SCRIPT_DIR%Plugin"
 
 if not exist "%PLUGIN_SOURCE%\AutoNAV.dll" (
     echo ERROR: AutoNAV.dll not found in %PLUGIN_SOURCE%
+    echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
+    pause
+    exit /b 1
+)
+
+if not exist "%PLUGIN_SOURCE%\AutoNAV.addin" (
+    echo ERROR: AutoNAV.addin not found in %PLUGIN_SOURCE%
     echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
     pause
     exit /b 1
@@ -68,21 +76,16 @@ exit /b 0
 REM ---- Subroutine: install to one version ----
 :TryInstall
 set "NW_VERSION=%~1"
-set "NW_PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins"
-set "NW_ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
+set "NW_INSTALL_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%"
 
-REM Prefer the AddIns folder next to the exe; fall back to ProgramData Plugins
-set "DEST="
-if exist "C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%" (
-    set "DEST=%NW_ADDIN_DIR%"
-) else if exist "%NW_PLUGIN_DIR%" (
-    set "DEST=%NW_PLUGIN_DIR%"
-)
-
-if "!DEST!"=="" (
-    echo  [--] Navisworks %NW_VERSION% not found — skipped
+REM Navisworks must be installed to proceed
+if not exist "!NW_INSTALL_DIR!" (
+    echo  [--] Navisworks %NW_VERSION% not found -- skipped
     goto :eof
 )
+
+REM Plugin destination: ProgramData\...\Plugins\AutoNAV\ (works for all versions 2024-2027)
+set "DEST=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV"
 
 if not exist "!DEST!" mkdir "!DEST!"
 
@@ -93,9 +96,9 @@ if exist "%PLUGIN_SOURCE%\AutoNAV.pdb" (
 )
 
 if errorlevel 1 (
-    echo  [!] Navisworks %NW_VERSION% — copy failed, check permissions
+    echo  [!] Navisworks %NW_VERSION% -- copy failed, check permissions
 ) else (
-    echo  [+] Navisworks %NW_VERSION% — installed to !DEST!
+    echo  [+] Navisworks %NW_VERSION% -- installed to !DEST!
     set /a INSTALLED_COUNT+=1
     if "!INSTALLED_VERSIONS!"=="" (
         set "INSTALLED_VERSIONS=%NW_VERSION%"

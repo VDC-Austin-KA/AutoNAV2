@@ -2,6 +2,7 @@
 # AutoNAV Installer Script
 # Version: 3.0.0
 # Installs AutoNAV to all detected Navisworks Manage versions (2024-2027)
+# Plugin path: C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 # Author: Keith Acker
 ################################################################################
 
@@ -36,40 +37,49 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Get-NavisworksAddinPath {
+# Returns the Navisworks install directory if found, otherwise null
+function Get-NavisworksInstallDir {
     param([string]$Version)
     $candidates = @(
-        "C:\Program Files\Autodesk\Navisworks Manage $Version\AddIns",
-        "C:\Program Files (x86)\Autodesk\Navisworks Manage $Version\AddIns"
+        "C:\Program Files\Autodesk\Navisworks Manage $Version",
+        "C:\Program Files (x86)\Autodesk\Navisworks Manage $Version"
     )
     foreach ($p in $candidates) {
-        if (Test-Path (Split-Path $p -Parent)) { return $p }
+        if (Test-Path $p) { return $p }
     }
     return $null
+}
+
+# Returns the per-machine plugin folder (AutoNAV subfolder inside Plugins)
+function Get-PluginInstallPath {
+    param([string]$Version)
+    return "C:\ProgramData\Autodesk\Navisworks Manage $Version\Plugins\AutoNAV"
 }
 
 function Install-ToVersion {
     param([string]$Version, [string]$DllFile, [string]$AddinFile, [string]$PdbFile)
 
-    $addinPath = Get-NavisworksAddinPath -Version $Version
-    if (-not $addinPath) { return $false }
+    $installDir = Get-NavisworksInstallDir -Version $Version
+    if (-not $installDir) { return $false }
 
-    Write-ColorOutput "  Installing to Navisworks Manage $Version..." -Type Info
+    Write-ColorOutput ("  Installing to Navisworks Manage " + $Version + "...") -Type Info
 
-    if (-not (Test-Path $addinPath)) {
-        New-Item -ItemType Directory -Path $addinPath -Force | Out-Null
+    $pluginPath = Get-PluginInstallPath -Version $Version
+
+    if (-not (Test-Path $pluginPath)) {
+        New-Item -ItemType Directory -Path $pluginPath -Force | Out-Null
     }
 
-    $dllTarget   = Join-Path $addinPath "AutoNAV.dll"
-    $addinTarget = Join-Path $addinPath "AutoNAV.addin"
-    $pdbTarget   = Join-Path $addinPath "AutoNAV.pdb"
+    $dllTarget   = Join-Path $pluginPath "AutoNAV.dll"
+    $addinTarget = Join-Path $pluginPath "AutoNAV.addin"
+    $pdbTarget   = Join-Path $pluginPath "AutoNAV.pdb"
 
     if ((Test-Path $dllTarget) -or (Test-Path $addinTarget)) {
-        $backupPath = Join-Path $addinPath ("AutoNAV_Backup_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
+        $backupPath = Join-Path $pluginPath ("Backup_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
         New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
         if (Test-Path $dllTarget)   { Copy-Item $dllTarget   $backupPath -Force }
         if (Test-Path $addinTarget) { Copy-Item $addinTarget $backupPath -Force }
-        Write-ColorOutput "    Backup saved to: $backupPath" -Type Warning
+        Write-ColorOutput ("    Backup saved to: " + $backupPath) -Type Warning
     }
 
     Copy-Item $DllFile   $dllTarget   -Force
@@ -77,26 +87,34 @@ function Install-ToVersion {
     if (Test-Path $PdbFile) { Copy-Item $PdbFile $pdbTarget -Force }
 
     $size = [math]::Round((Get-Item $dllTarget).Length / 1KB, 1)
-    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- installed (" + $size + " KB) -> " + $addinPath) -Type Success
+    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- installed (" + $size + " KB) -> " + $pluginPath) -Type Success
     return $true
 }
 
 function Uninstall-FromVersion {
     param([string]$Version)
 
-    $addinPath = Get-NavisworksAddinPath -Version $Version
-    if (-not $addinPath) { return $false }
+    $pluginPath = Get-PluginInstallPath -Version $Version
+    $dllTarget   = Join-Path $pluginPath "AutoNAV.dll"
+    $addinTarget = Join-Path $pluginPath "AutoNAV.addin"
+    $pdbTarget   = Join-Path $pluginPath "AutoNAV.pdb"
 
-    $dllTarget   = Join-Path $addinPath "AutoNAV.dll"
-    $addinTarget = Join-Path $addinPath "AutoNAV.addin"
-    $pdbTarget   = Join-Path $addinPath "AutoNAV.pdb"
+    # Also check old AddIns location so upgrades from older installs are cleaned up
+    $oldAddInsPath = "C:\Program Files\Autodesk\Navisworks Manage $Version\AddIns"
+    $oldDll        = Join-Path $oldAddInsPath "AutoNAV.dll"
+    $oldAddin      = Join-Path $oldAddInsPath "AutoNAV.addin"
+    $oldPdb        = Join-Path $oldAddInsPath "AutoNAV.pdb"
 
-    $found = (Test-Path $dllTarget) -or (Test-Path $addinTarget)
+    $found = (Test-Path $dllTarget) -or (Test-Path $addinTarget) -or (Test-Path $oldDll) -or (Test-Path $oldAddin)
     if (-not $found) { return $false }
 
     if (Test-Path $dllTarget)   { Remove-Item $dllTarget   -Force }
     if (Test-Path $addinTarget) { Remove-Item $addinTarget -Force }
     if (Test-Path $pdbTarget)   { Remove-Item $pdbTarget   -Force }
+
+    if (Test-Path $oldDll)   { Remove-Item $oldDll   -Force }
+    if (Test-Path $oldAddin) { Remove-Item $oldAddin -Force }
+    if (Test-Path $oldPdb)   { Remove-Item $oldPdb   -Force }
 
     Write-ColorOutput ("  [+] Navisworks " + $Version + " -- removed") -Type Success
     return $true

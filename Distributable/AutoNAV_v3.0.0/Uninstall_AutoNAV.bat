@@ -1,6 +1,7 @@
 @echo off
-REM AutoNAV v3.0.0 — Uninstallation Script
+REM AutoNAV v3.0.0 - Uninstallation Script
 REM Removes AutoNAV from ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
+REM Cleans both the current plugin path and the legacy AddIns path
 
 setlocal enabledelayedexpansion
 
@@ -48,18 +49,24 @@ exit /b 0
 
 :TryRemove
 set "NW_VERSION=%~1"
-set "ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
-set "PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins"
 set FOUND=0
 
-for %%D in ("!ADDIN_DIR!" "!PLUGIN_DIR!") do (
-    if exist "%%~D\AutoNAV.dll"   ( del /F /Q "%%~D\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
-    if exist "%%~D\AutoNAV.addin" ( del /F /Q "%%~D\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
-    if exist "%%~D\AutoNAV.pdb"   ( del /F /Q "%%~D\AutoNAV.pdb"   >nul 2>&1 )
-)
+REM Current plugin path: ProgramData\...\Plugins\AutoNAV\
+set "PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV"
+
+REM Legacy path: Program Files\...\AddIns\ (used by older AutoNAV installs)
+set "ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
+
+if exist "!PLUGIN_DIR!\AutoNAV.dll"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
+if exist "!PLUGIN_DIR!\AutoNAV.addin" ( del /F /Q "!PLUGIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
+if exist "!PLUGIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
+
+if exist "!ADDIN_DIR!\AutoNAV.dll"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
+if exist "!ADDIN_DIR!\AutoNAV.addin" ( del /F /Q "!ADDIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
+if exist "!ADDIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
 
 if !FOUND! equ 1 (
-    echo  [+] Navisworks %NW_VERSION% — removed
+    echo  [+] Navisworks %NW_VERSION% -- removed
     set /a REMOVED_COUNT+=1
     if "!REMOVED_VERSIONS!"=="" (
         set "REMOVED_VERSIONS=%NW_VERSION%"
@@ -67,6 +74,6 @@ if !FOUND! equ 1 (
         set "REMOVED_VERSIONS=!REMOVED_VERSIONS!, %NW_VERSION%"
     )
 ) else (
-    echo  [--] Navisworks %NW_VERSION% — not installed, skipped
+    echo  [--] Navisworks %NW_VERSION% -- not installed, skipped
 )
 goto :eof
