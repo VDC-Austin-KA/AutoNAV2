@@ -479,8 +479,10 @@ namespace AutoNAV
             try
             {
                 var confirm = MessageBox.Show(
-                    "This will group ALL clash test results by Walls and Floors,\n" +
-                    "leaving everything else ungrouped for Sherlock Distill.\n\n" +
+                    "Before continuing, make sure all clash tests have been run in Clash Detective.\n\n" +
+                    "This will:\n" +
+                    "  1. Group clashes into Walls and Floors using the matching search sets\n" +
+                    "  2. Leave all other clashes ungrouped (ready for Sherlock Distill)\n\n" +
                     "Continue?",
                     "Function 6 — Walls / Floors Grouping",
                     MessageBoxButton.YesNo,

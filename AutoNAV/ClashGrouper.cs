@@ -83,6 +83,15 @@ namespace AutoNAV
         // ─────────────────────────────────────────────────────────────
         // Function 6 — Group ALL tests by Walls / Floors via search sets
         // Returns a formatted summary string for the result dialog.
+        //
+        // Steps:
+        //   1. Run every clash test to get fresh results.
+        //   2. For each test, resolve which disciplines are involved
+        //      (parsed from the "A vs B" test name) and load only those
+        //      disciplines' Floors / Walls search sets.
+        //   3. Partition each clash result: Walls → "Walls" group,
+        //      Floors → "Floors" group, neither → left ungrouped
+        //      (ready for Sherlock Distill).
         // ─────────────────────────────────────────────────────────────
         public static string GroupAllTestsByWallsAndFloors()
         {
@@ -96,40 +105,41 @@ namespace AutoNAV
                 if (documentClash == null || documentClash.TestsData == null)
                     return "Clash Detective is not available or no tests exist.";
 
-                Dictionary<string, HashSet<ModelItem>> setMap =
-                    BuildWallsFloorsSearchSetMap(doc);
+                var allTests = documentClash.TestsData.Tests.Cast<ClashTest>().ToList();
+                if (allTests.Count == 0)
+                    return "No clash tests found.";
 
-                if (setMap.Count == 0)
-                    return "No 'Walls' or 'Floors' search sets found in '" + CLASH_SETS_FOLDER + "'.\n\n" +
+                // Step 1 — build per-discipline Floors/Walls item sets once
+                var disciplineMap = BuildDisciplineWallsFloorsMap(doc);
+
+                if (disciplineMap.Count == 0)
+                    return "No 'Walls' or 'Floors' search sets found under '" + CLASH_SETS_FOLDER + "'.\n\n" +
                            "Run Functions 1–3 first to create the required search sets.";
 
-                int testsProcessed = 0;
-                int testsSkipped   = 0;
-                int wallsTotal     = 0;
-                int floorsTotal    = 0;
-                int otherTotal     = 0;
-                var errorLog       = new List<string>();
+                int testsProcessed = 0, testsSkipped = 0;
+                int wallsTotal = 0, floorsTotal = 0, otherTotal = 0;
+                var errorLog = new List<string>();
 
-                foreach (ClashTest test in documentClash.TestsData.Tests)
+                foreach (ClashTest test in allTests)
                 {
                     try
                     {
-                        List<ClashResult> all =
-                            GetIndividualClashResults(test, false).ToList();
-
+                        var all = GetIndividualClashResults(test, false).ToList();
                         if (all.Count == 0) { testsSkipped++; continue; }
 
-                        GroupByWallsAndFloorsViaSearchSets(
-                            all, setMap,
+                        // Scope search sets to this test's disciplines only
+                        var setMap = BuildSetMapForTest(test, disciplineMap);
+
+                        GroupByWallsAndFloorsViaSearchSets(all, setMap,
                             out List<ClashResultGroup> groups,
                             out List<ClashResult> ungrouped);
 
-                        int w = 0, f = 0;
-                        foreach (var g in groups)
-                        {
-                            if (g.DisplayName.StartsWith("Walls",  StringComparison.OrdinalIgnoreCase)) w += g.Children.Count;
-                            if (g.DisplayName.StartsWith("Floors", StringComparison.OrdinalIgnoreCase)) f += g.Children.Count;
-                        }
+                        int w = groups
+                            .Where(g => g.DisplayName.StartsWith("Walls",  StringComparison.OrdinalIgnoreCase))
+                            .Sum(g => g.Children.Count);
+                        int f = groups
+                            .Where(g => g.DisplayName.StartsWith("Floors", StringComparison.OrdinalIgnoreCase))
+                            .Sum(g => g.Children.Count);
 
                         ProcessClashGroup(groups, ungrouped, test);
 
@@ -144,16 +154,14 @@ namespace AutoNAV
                     }
                 }
 
-                string summary =
-                    string.Format(
-                        "Function 6 — Walls / Floors Grouping Complete\n\n" +
-                        "Tests processed : {0}\n" +
-                        "Tests skipped   : {1}  (no results)\n\n" +
-                        "Grouped as Walls  : {2}\n" +
-                        "Grouped as Floors : {3}\n" +
-                        "Left ungrouped    : {4}  (ready for Sherlock Distill)\n",
-                        testsProcessed, testsSkipped,
-                        wallsTotal, floorsTotal, otherTotal);
+                string summary = string.Format(
+                    "Function 6 — Walls / Floors Grouping Complete\n\n" +
+                    "Tests processed : {0}\n" +
+                    "Tests skipped   : {1}  (no results)\n\n" +
+                    "Grouped as Walls  : {2}\n" +
+                    "Grouped as Floors : {3}\n" +
+                    "Left ungrouped    : {4}  (ready for Sherlock Distill)\n",
+                    testsProcessed, testsSkipped, wallsTotal, floorsTotal, otherTotal);
 
                 if (errorLog.Count > 0)
                     summary += "\nErrors:\n" + string.Join("\n", errorLog);
@@ -255,6 +263,115 @@ namespace AutoNAV
             catch (Exception ex)
             {
                 Debug.WriteLine("[AutoNAV] BuildWallsFloorsSearchSetMap failed: " + ex.Message);
+            }
+
+            return result;
+        }
+
+        // Build { discipline → { "Floors" → HashSet<ModelItem>, "Walls" → HashSet<ModelItem> } }
+        // Scans every subfolder of "2. CLASH SETS" once.
+        private static Dictionary<string, Dictionary<string, HashSet<ModelItem>>> BuildDisciplineWallsFloorsMap(Document doc)
+        {
+            var result = new Dictionary<string, Dictionary<string, HashSet<ModelItem>>>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                GroupItem root = doc.SelectionSets.RootItem as GroupItem;
+                if (root == null) return result;
+
+                GroupItem clashFolder = FindFolderInGroup(root, CLASH_SETS_FOLDER);
+                if (clashFolder == null) return result;
+
+                foreach (SavedItem discItem in clashFolder.Children)
+                {
+                    if (!(discItem is GroupItem discGroup)) continue;
+                    string discName = discItem.DisplayName?.Trim() ?? "";
+                    if (string.IsNullOrEmpty(discName)) continue;
+
+                    var discMap = new Dictionary<string, HashSet<ModelItem>>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (SavedItem setItem in discGroup.Children)
+                    {
+                        string setName = setItem.DisplayName?.Trim() ?? "";
+                        if (!setName.Equals("Walls",  StringComparison.OrdinalIgnoreCase) &&
+                            !setName.Equals("Floors", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        if (!(setItem is SelectionSet ss) || !ss.HasSearch) continue;
+
+                        try
+                        {
+                            ModelItemCollection hits = ss.Search.FindAll(doc, false);
+                            if (hits == null || hits.Count == 0) continue;
+
+                            if (!discMap.TryGetValue(setName, out HashSet<ModelItem> bucket))
+                            {
+                                bucket = new HashSet<ModelItem>();
+                                discMap[setName] = bucket;
+                            }
+                            foreach (ModelItem hit in hits)
+                                AddWithDescendants(hit, bucket);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine("[AutoNAV] FindAll " + discName + "/" + setName + ": " + ex.Message);
+                        }
+                    }
+
+                    if (discMap.Count > 0)
+                        result[discName] = discMap;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[AutoNAV] BuildDisciplineWallsFloorsMap: " + ex.Message);
+            }
+            return result;
+        }
+
+        // Merge only the Floors/Walls sets for the disciplines involved in a specific clash test.
+        // Discipline names are parsed from the test's display name ("DiscA vs DiscB").
+        // Falls back to the union of all disciplines if the name cannot be parsed.
+        private static Dictionary<string, HashSet<ModelItem>> BuildSetMapForTest(
+            ClashTest test,
+            Dictionary<string, Dictionary<string, HashSet<ModelItem>>> disciplineMap)
+        {
+            var result = new Dictionary<string, HashSet<ModelItem>>(StringComparer.OrdinalIgnoreCase);
+
+            string[] vsParts = test.DisplayName.Split(new[] { " vs " }, StringSplitOptions.None);
+            var disciplines = new List<string>();
+            foreach (string part in vsParts)
+            {
+                // Strip qualifiers like "Floors (MP)" → "MP", or "ST (excluding Floors)" → "ST"
+                string d = part.Trim();
+                int paren = d.IndexOf('(');
+                if (paren > 0)
+                    d = d.Substring(0, paren).Trim();
+                else if (paren == 0)
+                {
+                    int close = d.IndexOf(')');
+                    if (close > 0) d = d.Substring(1, close - 1).Trim();
+                }
+                if (!string.IsNullOrEmpty(d) &&
+                    !d.Equals("Remaining", StringComparison.OrdinalIgnoreCase))
+                    disciplines.Add(d);
+            }
+
+            IEnumerable<string> toCheck = disciplines.Count > 0
+                ? (IEnumerable<string>)disciplines
+                : disciplineMap.Keys;
+
+            foreach (string disc in toCheck)
+            {
+                if (!disciplineMap.TryGetValue(disc, out var discMap)) continue;
+                foreach (var kvp in discMap)
+                {
+                    if (!result.TryGetValue(kvp.Key, out var bucket))
+                    {
+                        bucket = new HashSet<ModelItem>();
+                        result[kvp.Key] = bucket;
+                    }
+                    foreach (ModelItem mi in kvp.Value) bucket.Add(mi);
+                }
             }
 
             return result;
@@ -659,6 +776,14 @@ namespace AutoNAV
 
         #region Helpers
 
+        // ProcessClashGroup — writes groups and ungrouped results back to the document.
+        //
+        // Critical pattern: TestsAddCopy does NOT deep-copy a ClashResultGroup's children
+        // when the group was built in memory (children added via .Children.Add before the
+        // group existed in the document). The fix is:
+        //   1. Add the empty group shell via TestsAddCopy → it now lives in the document.
+        //   2. Retrieve the live document reference to that group.
+        //   3. Add each ClashResult to the live group via TestsAddCopy.
         private static void ProcessClashGroup(
             List<ClashResultGroup> clashGroups,
             List<ClashResult> ungroupedClashResults,
@@ -668,35 +793,59 @@ namespace AutoNAV
             Progress progressBar = null;
             try
             {
+                DocumentClash docClash = Application.MainDocument.GetClash();
+                int idx = docClash.TestsData.Tests.IndexOf(selectedClashTest);
+                if (idx < 0) return;
+
                 tx = Application.MainDocument.BeginTransaction("Group clashes");
 
-                ClashTest copiedTest   = (ClashTest)selectedClashTest.CreateCopyWithoutChildren();
-                ClashTest backupTest   = (ClashTest)selectedClashTest.CreateCopy();
-                DocumentClash docClash = Application.MainDocument.GetClash();
-                int idx                = docClash.TestsData.Tests.IndexOf(selectedClashTest);
+                // Replace the test with an empty copy to clear existing children
+                docClash.TestsData.TestsReplaceWithCopy(
+                    idx, (ClashTest)selectedClashTest.CreateCopyWithoutChildren());
 
-                docClash.TestsData.TestsReplaceWithCopy(idx, copiedTest);
-
-                int done  = 0;
-                int total = ungroupedClashResults.Count + clashGroups.Count;
+                int totalItems = clashGroups.Sum(g => g.Children.Count) + ungroupedClashResults.Count;
                 progressBar = Application.BeginProgress("Grouping Clashes", "Processing...");
+                int done = 0;
 
-                foreach (ClashResultGroup g in clashGroups)
+                foreach (ClashResultGroup grp in clashGroups)
                 {
                     if (progressBar.IsCanceled) break;
-                    docClash.TestsData.TestsAddCopy((GroupItem)docClash.TestsData.Tests[idx], g);
-                    progressBar.Update((double)++done / total);
+
+                    // Step 1 — add the empty shell so the group exists in the document
+                    docClash.TestsData.TestsAddCopy(
+                        (GroupItem)docClash.TestsData.Tests[idx],
+                        new ClashResultGroup { DisplayName = grp.DisplayName });
+
+                    // Step 2 — walk back to find the live group reference (last ClashResultGroup)
+                    ClashTest liveTest = (ClashTest)docClash.TestsData.Tests[idx];
+                    ClashResultGroup liveGroup = null;
+                    for (int i = liveTest.Children.Count - 1; i >= 0; i--)
+                    {
+                        if (liveTest.Children[i] is ClashResultGroup crg)
+                        {
+                            liveGroup = crg;
+                            break;
+                        }
+                    }
+
+                    if (liveGroup == null) continue;
+
+                    // Step 3 — add each result to the live document-bound group
+                    foreach (SavedItem child in grp.Children)
+                    {
+                        if (progressBar.IsCanceled) break;
+                        if (child is ClashResult cr)
+                            docClash.TestsData.TestsAddCopy(liveGroup, cr);
+                        progressBar.Update((double)++done / Math.Max(totalItems, 1));
+                    }
                 }
 
                 foreach (ClashResult cr in ungroupedClashResults)
                 {
                     if (progressBar.IsCanceled) break;
                     docClash.TestsData.TestsAddCopy((GroupItem)docClash.TestsData.Tests[idx], cr);
-                    progressBar.Update((double)++done / total);
+                    progressBar.Update((double)++done / Math.Max(totalItems, 1));
                 }
-
-                if (progressBar.IsCanceled)
-                    docClash.TestsData.TestsReplaceWithCopy(idx, backupTest);
 
                 tx.Commit();
             }
