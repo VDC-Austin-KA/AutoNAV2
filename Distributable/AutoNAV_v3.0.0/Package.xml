@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package>
+  <Metadata>
+    <Name>AutoNAV</Name>
+    <DisplayName>AutoNAV - Automated Design Coordination Plugin</DisplayName>
+    <Version>3.0.0.0</Version>
+    <ReleaseDate>2026-05-20</ReleaseDate>
+    <Developer>Keith Acker</Developer>
+    <Description>Automated Design Coordination Plugin for Navisworks Manage</Description>
+    <License>Internal Use Only</License>
+  </Metadata>
+
+  <SupportedVersions>
+    <Version Name="Navisworks 2026" />
+    <Version Name="Navisworks 2025" />
+    <Version Name="Navisworks 2024" />
+  </SupportedVersions>
+
+  <Contents>
+    <File Name="AutoNAV.dll" Description="Plugin Assembly" Required="true" />
+    <File Name="AutoNAV.addin" Description="Plugin Manifest" Required="true" />
+  </Contents>
+
+  <Features>
+    <Feature Name="Function 1: Discipline Search Sets" Description="Creates hierarchical search sets organized by discipline" />
+    <Feature Name="Function 2: Element Property Search Sets" Description="Generates search sets based on element properties and categories" />
+    <Feature Name="Function 3: Custom Value-Based Search Sets" Description="Creates custom search sets from any property value" />
+    <Feature Name="Function 4: Automated Clash Test Generation" Description="Generates clash tests from search set combinations" />
+    <Feature Name="Function 5: Clash Result Grouping" Description="Intelligently groups clash results by discipline and category" />
+    <Feature Name="Function 6: Batch Clash Test Updates" Description="Updates multiple clash tests simultaneously" />
+  </Features>
+
+  <SystemRequirements>
+    <Framework>.NET Framework 4.8</Framework>
+    <OS>Windows 10 or later</OS>
+    <RAM>4GB minimum (8GB recommended)</RAM>
+    <Disk>50MB available space</Disk>
+  </SystemRequirements>
+
+  <Installation>
+    <Type>Plugin</Type>
+    <InstallationFolder>Navisworks Plugins Directory</InstallationFolder>
+    <AdminRequired>true</AdminRequired>
+    <RestartRequired>true</RestartRequired>
+  </Installation>
+
+  <ReleaseNotes>
+    <Version Version="3.0.0.0">
+      <Date>2026-05-20</Date>
+      <Changes>
+        <Change>Initial release of AutoNAV v3.0</Change>
+        <Change>Integrated UI with tabbed interface for all functions</Change>
+        <Change>Full support for Navisworks 2024, 2025, and 2026</Change>
+        <Change>Enhanced clash result grouping and categorization</Change>
+        <Change>Batch processing capabilities for clash tests</Change>
+      </Changes>
+    </Version>
+  </ReleaseNotes>
+
+  <InstallationInstructions>
+    <Step Number="1">Extract the AutoNAV_v3.0.0 folder to a known location</Step>
+    <Step Number="2">Right-click Install_AutoNAV.bat and select "Run as administrator"</Step>
+    <Step Number="3">Follow the installation prompts</Step>
+    <Step Number="4">Restart Navisworks Manage</Step>
+    <Step Number="5">Access AutoNAV via Add-ins menu</Step>
+  </InstallationInstructions>
+
+  <UninstallationInstructions>
+    <Step Number="1">Right-click Uninstall_AutoNAV.bat and select "Run as administrator"</Step>
+    <Step Number="2">Follow the uninstallation prompts</Step>
+    <Step Number="3">Restart Navisworks Manage (if running)</Step>
+  </UninstallationInstructions>
+
+</Package>

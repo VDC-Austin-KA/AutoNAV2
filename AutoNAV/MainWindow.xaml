@@ -1,0 +1,246 @@
+
+  <Window x:Class="AutoNAV.MainWindow"
+xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+Title="AutoNAV"
+Height="650"
+Width="900"
+WindowStartupLocation="CenterScreen"
+Background="#F5F5F5"
+Foreground="#333333">
+    <DockPanel LastChildFill="True">
+        <!-- HEADER -->
+        <Border DockPanel.Dock="Top" Background="#0078D4" Padding="20">
+            <StackPanel>
+                <TextBlock Text="AutoNAV" FontSize="24" FontWeight="Bold" Foreground="White"/>
+                <TextBlock Text="Automated Design Coordination Plugin" FontSize="12" Foreground="#E0E0E0" Margin="0,5,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- FOOTER -->
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="10,8" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="AutoNAV v3.0 | Navisworks 2024/2025/2026" FontSize="10" Foreground="#666666" VerticalAlignment="Center"/>
+                <TextBlock Name="txtStatus" FontSize="10" Foreground="#0078D4" Margin="15,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- MAIN CONTENT - TABS -->
+        <TabControl Margin="10">
+            <!-- TAB 1: FUNCTIONS 1-3 -->
+            <TabItem Header="Search Sets (Func 1-3)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock Text="Search Set Generation" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                        <TextBlock Text="Create hierarchical search sets by discipline and category" FontSize="12" Foreground="#666666" Margin="0,0,0,20"/>
+
+                        <!-- FUNCTION 1 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 1: Create Discipline Search Sets" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Creates '1. DISCIPLINES' folder with sets for ARCH, STRC, MECH, PLBG" FontSize="11" Foreground="#888888" Margin="0,0,0,12"/>
+                                <Button Name="btnFunction1" Content="Generate Discipline Sets" Click="OnFunction1Click" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 2 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 2: Create Element Property Search Sets" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Select discipline and property type for each. One property type per discipline." FontSize="11" Foreground="#888888" Margin="0,0,0,15"/>
+
+                                <!-- DISCIPLINE + PROPERTY TYPE SELECTION -->
+                                <TextBlock Text="1. Select Disciplines &amp; Property Types" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="#333333"/>
+                                <TextBlock Text="Note: Select one property type per discipline. Create multiple times for different property types." FontSize="10" Foreground="#888888" Margin="0,0,0,8" FontStyle="Italic"/>
+                                
+                                <Border Background="#F9F9F9" BorderBrush="#E0E0E0" BorderThickness="1" Padding="10" Margin="0,0,0,12" CornerRadius="3">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                            <Button Name="btnSelectAllDisciplines" Content="Select All" Click="BtnSelectAll_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="80" Margin="0,0,5,0"/>
+                                            <Button Name="btnDeselectAllDisciplines" Content="Deselect All" Click="BtnDeselectAll_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="80" Margin="0,0,5,0"/>
+                                            <Button Name="btnInvertSelection" Content="Invert Selection" Click="BtnInvertSelection_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="100" Margin="0,0,5,0"/>
+                                            <Button Name="btnRefreshDisciplineList" Content="Refresh" Click="BtnRefreshDisciplines_Click" Padding="8,5" Background="#666666" Foreground="White" FontSize="10" Width="70"/>
+                                        </StackPanel>
+                                        
+                                        <!-- Discipline list with dropdowns -->
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MinHeight="100" MaxHeight="300" Margin="0,5,0,0" BorderThickness="1" BorderBrush="#E0E0E0">
+                                            <StackPanel Name="disciplineCheckboxPanel" Orientation="Vertical" Background="White" Margin="5">
+                                                <TextBlock Text="No disciplines loaded. Run Function 1 first." FontSize="10" Foreground="#999999"/>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ACTION BUTTON -->
+                                <Button Name="btnFunction2" Content="Generate Element Property Search Sets" Click="OnFunction2Click" Padding="10,10" Background="#107C10" Foreground="White" FontWeight="Bold" FontSize="12" Height="40" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 3 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 3: Custom Search Sets from Property Values" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Create custom search sets based on any property value in a discipline's model content" FontSize="11" Foreground="#888888" Margin="0,0,0,15"/>
+                                <TextBlock Text="Select a discipline, then choose a property category and property to create search sets for all unique values." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
+
+                                <!-- Discipline Selection -->
+                                <TextBlock Text="1. Select Discipline:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                <ComboBox Name="cmbFunction3Discipline" Height="26" Margin="0,0,0,12" FontSize="11" SelectionChanged="OnFunction3DisciplineChanged">
+                                    <ComboBoxItem Content="-- Select Discipline --" IsSelected="True"/>
+                                </ComboBox>
+
+                                <!-- Property Category Selection -->
+                                <TextBlock Text="2. Select Property Category:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                <ComboBox Name="cmbFunction3PropertyCategory" Height="26" Margin="0,0,0,12" FontSize="11" IsEnabled="False" SelectionChanged="OnFunction3PropertyCategoryChanged">
+                                    <ComboBoxItem Content="-- Select Category --" IsSelected="True"/>
+                                </ComboBox>
+
+                                <!-- Property Name Selection -->
+                                <TextBlock Text="3. Select Property:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                <ComboBox Name="cmbFunction3PropertyName" Height="26" Margin="0,0,0,12" FontSize="11" IsEnabled="False" SelectionChanged="OnFunction3PropertyNameChanged">
+                                    <ComboBoxItem Content="-- Select Property --" IsSelected="True"/>
+                                </ComboBox>
+
+                                <!-- Run Button -->
+                                <Button Name="btnFunction3" Content="Generate Custom Search Sets" Click="OnFunction3Click" IsEnabled="False" Padding="10,8" Background="#FFB900" Foreground="#000000" FontWeight="Bold" Width="220" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB 2: FUNCTION 4 -->
+            <TabItem Header="Clash Tests (Func 4)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock Text="Discipline-Based Clash Test Generation" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                        <TextBlock Text="Automatically create clash tests from discipline and category sets" FontSize="12" Foreground="#666666" Margin="0,0,0,20"/>
+
+                        <!-- PREREQUISITES -->
+                        <Border Background="#FFF8DC" BorderBrush="#FFD700" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Prerequisites" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="✓ Functions 1-3 must complete first" FontSize="11" Margin="0,0,0,5"/>
+                                <TextBlock Text="✓ Requires '1. DISCIPLINES' folder with search sets" FontSize="11" Margin="0,0,0,5"/>
+                                <TextBlock Text="✓ Requires '2. CLASH SETS' folder with category sets" FontSize="11" Margin="0,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 4 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 4: Generate Clash Tests" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Creates unique clash test pairs: ARCH vs STRC, ARCH vs MECH, STRC vs MECH, etc." FontSize="11" Foreground="#888888" Margin="0,0,0,12"/>
+                                <Button Name="btnFunction4" Content="Generate Clash Tests" Click="OnFunction4Click" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 5 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 5: Run Tests &amp; Group Clashes" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Run all clash tests and optionally group results by various criteria." FontSize="11" Foreground="#888888" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                
+                                <!-- UPDATE ALL TESTS SECTION -->
+                                <TextBlock Text="1. Run All Clash Tests:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <Button Name="btnUpdateAllTests" Content="Update All Tests (Run Simultaneously)" Click="OnUpdateAllTestsClick" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="250" HorizontalAlignment="Left" Margin="0,0,0,15"/>
+                                <TextBlock Text="Runs all clash tests simultaneously in the background." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                
+                                <!-- GROUPING OPTIONS SECTION -->
+                                <TextBlock Text="2. Group Clash Results:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <TextBlock Text="Select a grouping method and click 'Group Clashes' to organize results." FontSize="10" Foreground="#666666" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                                
+                                <!-- Grouping Mode Selection -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <TextBlock Text="Primary Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox Name="cmbGroupingMode" Width="180" Height="26" FontSize="11">
+                                        <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
+                                        <ComboBoxItem Content="Level" Tag="Level"/>
+                                        <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
+                                        <ComboBoxItem Content="Selection A (First Element)" Tag="SelectionA"/>
+                                        <ComboBoxItem Content="Selection B (Last Element)" Tag="SelectionB"/>
+                                        <ComboBoxItem Content="Model A" Tag="ModelA"/>
+                                        <ComboBoxItem Content="Model B" Tag="ModelB"/>
+                                        <ComboBoxItem Content="Status" Tag="Status"/>
+                                        <ComboBoxItem Content="Assigned To" Tag="AssignedTo"/>
+                                        <ComboBoxItem Content="Approved By" Tag="ApprovedBy"/>
+                                        <ComboBoxItem Content="File" Tag="File"/>
+                                        <ComboBoxItem Content="Layer" Tag="Layer"/>
+                                        <ComboBoxItem Content="First Element" Tag="First"/>
+                                        <ComboBoxItem Content="Last Element" Tag="Last"/>
+                                        <ComboBoxItem Content="Last Unique Pair" Tag="LastUnique"/>
+                                        <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <TextBlock Text="Sub-Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <ComboBox Name="cmbSubGroupingMode" Width="180" Height="26" FontSize="11">
+                                        <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
+                                        <ComboBoxItem Content="Level" Tag="Level"/>
+                                        <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
+                                        <ComboBoxItem Content="Selection A" Tag="SelectionA"/>
+                                        <ComboBoxItem Content="Selection B" Tag="SelectionB"/>
+                                        <ComboBoxItem Content="Model A" Tag="ModelA"/>
+                                        <ComboBoxItem Content="Model B" Tag="ModelB"/>
+                                        <ComboBoxItem Content="Status" Tag="Status"/>
+                                        <ComboBoxItem Content="File" Tag="File"/>
+                                        <ComboBoxItem Content="Layer" Tag="Layer"/>
+                                        <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                
+                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" Margin="0,0,0,10"/>
+                                
+                                <!-- CLASH TEST SELECTION -->
+                                <TextBlock Text="3. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
+                                
+                                <!-- GROUP BUTTONS -->
+                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
+                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 6 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 6: Group Clashes by Walls / Floors" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
+                                    For every clash test, groups results where either clashing element
+                                    belongs to a Walls or Floors search set (from 2. CLASH SETS).
+                                    All remaining clashes are left ungrouped — ready for Sherlock Distill.
+                                </TextBlock>
+                                <TextBlock Text="Prerequisites: Functions 1–5 complete, clash tests run." FontSize="10" Foreground="#666666" FontStyle="Italic" Margin="0,0,0,12"/>
+                                <Button Name="btnFunction6"
+                                        Content="Group All Tests — Walls / Floors"
+                                        Click="OnFunction6Click"
+                                        Padding="10,8"
+                                        Background="#107C10"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Width="240"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- INFO -->
+                        <Border Background="#E7F3FF" BorderBrush="#0078D4" BorderThickness="1" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="How it works:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <TextBlock Text="1. Validates folder structure exists" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBlock Text="2. Extracts all disciplines from 1. DISCIPLINES" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBlock Text="3. Creates unique test pairs" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBlock Text="4. Populates with matching search sets from 2. CLASH SETS" FontSize="10" Margin="0,0,0,4"/>
+                                <TextBlock Text="5. Skips tests that already exist" FontSize="10" Margin="0,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

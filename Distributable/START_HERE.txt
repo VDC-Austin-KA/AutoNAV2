@@ -1,0 +1,346 @@
+================================================================================
+                            *** START HERE ***
+                           AutoNAV v3.0.0 Installer
+                               Quick Start Guide
+================================================================================
+
+Welcome! This file will guide you through installing AutoNAV.
+
+If you just want to install AutoNAV, do this:
+
+STEP 1: Right-click on "Install-AutoNAV.bat"
+STEP 2: Select "Run as administrator"  
+STEP 3: Follow the prompts
+STEP 4: Done! AutoNAV will appear in Navisworks when you restart it
+
+That's it! Takes about 10-20 seconds.
+
+================================================================================
+
+IF YOU WANT MORE INFORMATION:
+
+Quick Reference:
+  → README.txt                   (2 minute read, covers everything)
+
+Detailed Instructions:
+  → INSTALLATION_GUIDE.md        (Complete manual for advanced users)
+
+Installation Checklist:
+  → INSTALLER_CHECKLIST.txt      (Pre/post installation verification)
+
+File Descriptions:
+  → PACKAGE_CONTENTS.txt         (What each file does)
+
+Version Info:
+  → VERSION_NOTES.txt            (What's new, compatibility, known issues)
+
+This File:
+  → START_HERE.txt               (You are here!)
+
+================================================================================
+
+THE BASICS:
+
+What is AutoNAV?
+  AutoNAV is a plugin for Navisworks Manage that provides automated design
+  coordination and clash detection features. Once installed, it appears as a
+  button in Navisworks' "Add-Ins" ribbon tab.
+
+What does the installer do?
+  - Detects your Navisworks installation
+  - Backs up any existing installation
+  - Copies necessary files to the correct location
+  - Verifies everything is working
+  - Takes about 10-20 seconds
+
+What happens after installation?
+  - Next time you open Navisworks, AutoNAV will be available
+  - Click the AutoNAV button in the Add-Ins tab to use it
+  - That's it! No additional setup needed.
+
+How long does it take?
+  - Installation: 10-20 seconds
+  - To be ready to use: About 2 minutes (time to open Navisworks)
+
+================================================================================
+
+SYSTEM REQUIREMENTS (Quick Check):
+
+Do you have:
+  ✓ Windows 10 or Windows 11?
+  ✓ Navisworks Manage 2025 or 2024?
+  ✓ Administrator access to your computer?
+  ✓ .NET Framework 4.8 installed?
+
+If you answered YES to all four: You're ready to install!
+If you answered NO to any: See README.txt for help
+
+================================================================================
+
+INSTALLATION STEPS (In Detail):
+
+1. Right-click "Install-AutoNAV.bat"
+   └─ The file is in this same folder
+
+2. Select "Run as administrator"
+   └─ Click YES if Windows asks "Allow this app to make changes?"
+
+3. A window will open and show:
+   └─ Checking for Administrator privileges
+   └─ Looking for Navisworks
+   └─ Creating AddIns folder (if needed)
+   └─ Backing up old version (if you have one)
+   └─ Copying files
+   └─ Verifying installation
+
+4. Wait for the message: "Installation Completed Successfully!"
+   └─ This means it worked
+
+5. Close the window and restart Navisworks
+   └─ AutoNAV will appear in the Add-Ins tab
+
+6. Click the AutoNAV button to start using it
+   └─ Enjoy!
+
+================================================================================
+
+WHAT IF I SEE AN ERROR?
+
+"Administrator privileges required"
+  → Right-click the file and select "Run as administrator"
+
+"Navisworks not found"
+  → Install Navisworks Manage 2025 first, then try again
+
+"AutoNAV doesn't appear in Navisworks"
+  → Close Navisworks completely (not just the window)
+  → Run the installer again
+  → Restart Navisworks
+
+"Something else went wrong"
+  → Read the error message carefully
+  → See README.txt for detailed troubleshooting
+  → See INSTALLATION_GUIDE.md for comprehensive help
+
+================================================================================
+
+FILE GUIDE:
+
+This installer contains:
+
+SCRIPTS (Run these):
+  ├─ Install-AutoNAV.bat      ← Run this! (Easiest)
+  └─ Install-AutoNAV.ps1      ← Or this (Advanced users)
+
+PLUGIN FILES (These get installed):
+  ├─ AutoNAV.dll              (The main plugin)
+  ├─ AutoNAV.addin            (Configuration)
+  └─ AutoNAV.pdb              (Debug info, optional)
+
+DOCUMENTATION (Read these for help):
+  ├─ START_HERE.txt           (This file)
+  ├─ README.txt               (Quick start)
+  ├─ INSTALLATION_GUIDE.md    (Detailed guide)
+  ├─ INSTALLER_CHECKLIST.txt  (Pre/post checks)
+  ├─ PACKAGE_CONTENTS.txt     (File descriptions)
+  └─ VERSION_NOTES.txt        (Release info)
+
+================================================================================
+
+RECOMMENDED READING (By Situation):
+
+I just want to install AutoNAV:
+  1. Run Install-AutoNAV.bat (double-click it)
+  2. You're done!
+
+I'm new to this and need help:
+  1. Read README.txt (2 minutes)
+  2. Run Install-AutoNAV.bat
+  3. If you have questions, read INSTALLATION_GUIDE.md
+
+Something went wrong:
+  1. Check README.txt troubleshooting section
+  2. Check INSTALLATION_GUIDE.md troubleshooting
+  3. Check INSTALLER_CHECKLIST.txt
+
+I'm an advanced user/IT admin:
+  1. Read INSTALLATION_GUIDE.md
+  2. Read PACKAGE_CONTENTS.txt for technical details
+  3. Use Install-AutoNAV.ps1 for scripted deployment
+  4. Check VERSION_NOTES.txt for technical specs
+
+I want to understand everything:
+  1. README.txt (quick overview)
+  2. PACKAGE_CONTENTS.txt (what each file does)
+  3. INSTALLATION_GUIDE.md (detailed procedures)
+  4. INSTALLER_CHECKLIST.txt (verification)
+  5. VERSION_NOTES.txt (technical details)
+
+================================================================================
+
+INSTALLATION SUCCESS CHECKLIST:
+
+After you run the installer, verify:
+
+1. Installer said "Installation Completed Successfully!" ✓
+2. No error messages appeared ✓
+3. Navisworks launches normally ✓
+4. Look at the ribbon menu at top of Navisworks
+5. Find the "Add-Ins" tab ✓
+6. See the "AutoNAV" button ✓
+7. Click AutoNAV button - does AutoNAV panel open? ✓
+
+If you checked all boxes: INSTALLATION SUCCEEDED!
+If you unchecked any box: See README.txt for help
+
+================================================================================
+
+WHAT COMES NEXT?
+
+Now that AutoNAV is installed:
+
+1. Launch Navisworks Manage 2025
+2. Look for the Add-Ins tab in the ribbon
+3. Click AutoNAV to open the plugin
+4. Start using AutoNAV features!
+
+For help using AutoNAV:
+  - See the AutoNAV Help menu in Navisworks
+  - Ask your team members
+  - Check with your Navisworks administrator
+
+================================================================================
+
+QUICK TROUBLESHOOTING:
+
+Problem: "I can't find Install-AutoNAV.bat"
+Solution: All files should be in the same folder. Make sure you extracted
+          the ZIP file and all files are together.
+
+Problem: "Administrator privileges required"
+Solution: Right-click Install-AutoNAV.bat, select "Run as administrator"
+
+Problem: "Permission denied" or "Access denied"
+Solution: Close Navisworks completely, then try again as Administrator
+
+Problem: "Navisworks not found"
+Solution: Install Navisworks Manage 2025. Make sure you have "Manage"
+          not "Simulate" or "Freedom"
+
+Problem: AutoNAV button doesn't appear
+Solution: Close Navisworks completely (not just the window)
+          Restart Navisworks
+          If still nothing, run the installer again
+
+For more help: Read README.txt or INSTALLATION_GUIDE.md
+
+================================================================================
+
+IMPORTANT NOTES:
+
+1. You need Administrator access
+   → The installer will ask for admin privileges
+   → This is normal and required
+
+2. Navisworks will close automatically
+   → The installer might close Navisworks if it's running
+   → This is normal and won't hurt anything
+
+3. Your data is safe
+   → Installation doesn't affect your Navisworks files or projects
+   → If you had an old version, it's backed up automatically
+
+4. You can uninstall if needed
+   → Run: .\Install-AutoNAV.ps1 -Uninstall
+   → Or delete the files manually from the AddIns folder
+   → Full instructions in INSTALLATION_GUIDE.md
+
+5. This is version 3.0.0
+   → Works with Navisworks 2025 and 2024
+   → Requires .NET Framework 4.8
+
+================================================================================
+
+WHERE TO FIND THINGS:
+
+After installation, AutoNAV files are located at:
+  C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
+  
+You shouldn't need to access this folder, but it's good to know where it is.
+
+If you had a previous version, a backup was created at:
+  C:\Program Files\Autodesk\Navisworks Manage 2025\AddIns\
+    AutoNAV_Backup_[date and time]
+
+================================================================================
+
+GETTING HELP:
+
+Before asking for help, try:
+
+1. Read the error message - it often says exactly what's wrong
+2. Check README.txt - covers most common issues
+3. Check INSTALLATION_GUIDE.md troubleshooting section
+4. Check INSTALLER_CHECKLIST.txt pre-installation section
+5. Try running the installer again
+
+If you're still stuck:
+  → Contact your IT department
+  → Ask the person who gave you this installer
+  → Check with Navisworks support
+
+================================================================================
+
+READY TO INSTALL?
+
+1. Close this file (or minimize it)
+2. Find Install-AutoNAV.bat in this folder
+3. Right-click it
+4. Select "Run as administrator"
+5. Wait for success message
+6. Restart Navisworks
+7. Enjoy AutoNAV!
+
+It's that simple!
+
+================================================================================
+
+QUESTIONS?
+
+Most answers are in these files:
+
+Quick Answer:        → README.txt
+Detailed Answer:     → INSTALLATION_GUIDE.md
+Technical Details:   → PACKAGE_CONTENTS.txt or VERSION_NOTES.txt
+Pre-install Check:   → INSTALLER_CHECKLIST.txt
+
+================================================================================
+
+FINAL NOTES:
+
+✓ This installer has been thoroughly tested
+✓ It's safe to run
+✓ It has automatic error detection
+✓ It backs up your old version
+✓ Installation takes less than 1 minute
+✓ Everything is automated
+
+You're in good hands!
+
+================================================================================
+
+Ready? Let's do this!
+
+→ Run Install-AutoNAV.bat now!
+
+================================================================================
+
+Need more help? Read README.txt
+
+Still need help? Read INSTALLATION_GUIDE.md
+
+Questions? See VERSION_NOTES.txt or PACKAGE_CONTENTS.txt
+
+================================================================================
+Version 3.0.0 • May 2026 • Production Ready
+================================================================================
