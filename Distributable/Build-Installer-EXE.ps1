@@ -1,16 +1,20 @@
 ################################################################################
-# Build-Installer-EXE.ps1
+# Build-Installer-EXE.ps1  (single-DLL convenience build)
 #
-# Regenerates Distributable\AutoNAV-Installer.exe - a single-file, double-click,
-# self-elevating Windows .exe installer for AutoNAV.  Run this on a Windows
-# machine after rebuilding AutoNAV.dll.
+# Regenerates Distributable\AutoNAV-Installer.exe from a SINGLE AutoNAV.dll by
+# replicating that DLL into every Installer\payload\<year>\ subfolder before
+# linking.  Use this when you only have one Navisworks installed and just want a
+# functional installer for testing.
+#
+# For a CORRECT multi-version build (a separately-compiled DLL per Navisworks
+# year), use Build-MultiVersion.ps1 instead.
 #
 # Requirements:
 #   - Go installed and on PATH        https://go.dev/dl/
 #
 # Inputs:
-#   - Distributable\AutoNAV.dll       (copied into Installer\payload\)
-#   - Distributable\AutoNAV.addin     (copied into Installer\payload\)
+#   - Distributable\AutoNAV.dll       (replicated into Installer\payload\<year>\ x4)
+#   - Distributable\AutoNAV.addin
 #
 # Output:
 #   - Distributable\AutoNAV-Installer.exe   (~2 MB, single file; distribute as-is)
@@ -42,12 +46,14 @@ foreach ($p in @(
     if (-not (Test-Path -LiteralPath $p)) { throw "Missing input file: $p" }
 }
 
-if (-not (Test-Path -LiteralPath $payloadDir)) {
-    New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
+foreach ($year in @('2024','2025','2026','2027')) {
+    $yearDir = Join-Path $payloadDir $year
+    if (-not (Test-Path -LiteralPath $yearDir)) {
+        New-Item -ItemType Directory -Path $yearDir -Force | Out-Null
+    }
+    Copy-Item (Join-Path $distDir 'AutoNAV.dll')   (Join-Path $yearDir 'AutoNAV.dll')   -Force
+    Copy-Item (Join-Path $distDir 'AutoNAV.addin') (Join-Path $yearDir 'AutoNAV.addin') -Force
 }
-
-Copy-Item (Join-Path $distDir 'AutoNAV.dll')   (Join-Path $payloadDir 'AutoNAV.dll')   -Force
-Copy-Item (Join-Path $distDir 'AutoNAV.addin') (Join-Path $payloadDir 'AutoNAV.addin') -Force
 
 $outFile = Join-Path $distDir 'AutoNAV-Installer.exe'
 

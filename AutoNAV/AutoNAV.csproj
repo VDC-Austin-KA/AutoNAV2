@@ -25,7 +25,7 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-  <!-- Release x64 -->
+  <!-- Release x64 (auto-detect Navisworks version: prefers newest installed) -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
@@ -35,8 +35,50 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-  <!-- Auto-detect Navisworks installation: prefers newest available (2027 → 2024) -->
-  <PropertyGroup>
+  <!-- Per-version Release configurations: each pins NWPath to one Navisworks year. -->
+  <!-- Build with: msbuild /p:Configuration=Release-NW2024 (or NW2025/NW2026/NW2027) -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2024|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2024\</OutputPath>
+    <DefineConstants>TRACE;NW2024</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2024\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2025|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2025\</OutputPath>
+    <DefineConstants>TRACE;NW2025</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2026|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2026\</OutputPath>
+    <DefineConstants>TRACE;NW2026</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2026\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2027|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2027\</OutputPath>
+    <DefineConstants>TRACE;NW2027</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2027\</NWPath>
+  </PropertyGroup>
+  <!-- Default NWPath auto-detection: only used when Configuration != Release-NWxxxx -->
+  <PropertyGroup Condition=" '$(NWPath)' == '' ">
     <NWPath Condition="Exists('C:\Program Files\Autodesk\Navisworks Manage 2027\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2027\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2026\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2026\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2025\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>

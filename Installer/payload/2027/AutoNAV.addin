@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Addin Version="1.0">
+  <CompanyName>Keith Acker</CompanyName>
+  <AddInName>AutoNAV</AddInName>
+  <AddInDescription>AutoNAV - Automated Design Coordination for Navisworks</AddInDescription>
+  <AddInVersion>3.0.0.0</AddInVersion>
+  <FullClassName>AutoNAV.PluginMain</FullClassName>
+  <AssemblyFile>AutoNAV.dll</AssemblyFile>
+</Addin>

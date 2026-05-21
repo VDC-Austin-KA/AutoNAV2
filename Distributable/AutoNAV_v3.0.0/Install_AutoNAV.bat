@@ -33,18 +33,22 @@ if errorlevel 1 (
 )
 
 set "SCRIPT_DIR=%~dp0"
-set "PLUGIN_SOURCE=%SCRIPT_DIR%Plugin"
+set "PLUGIN_ROOT=%SCRIPT_DIR%Plugin"
 
-if not exist "%PLUGIN_SOURCE%\AutoNAV.dll" (
-    echo ERROR: AutoNAV.dll not found in %PLUGIN_SOURCE%
-    echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
-    pause
-    exit /b 1
+REM Per-version subfolders (Plugin\2024\, Plugin\2025\, ...) take precedence over
+REM the legacy single-folder layout (Plugin\AutoNAV.dll).  Either layout is OK as
+REM long as at least one per-version subfolder or the legacy pair exists.
+set "HAS_ANY_SOURCE=0"
+for %%V in (2024 2025 2026 2027) do (
+    if exist "%PLUGIN_ROOT%\%%V\AutoNAV.dll" if exist "%PLUGIN_ROOT%\%%V\AutoNAV.addin" set "HAS_ANY_SOURCE=1"
 )
+if exist "%PLUGIN_ROOT%\AutoNAV.dll" if exist "%PLUGIN_ROOT%\AutoNAV.addin" set "HAS_ANY_SOURCE=1"
 
-if not exist "%PLUGIN_SOURCE%\AutoNAV.addin" (
-    echo ERROR: AutoNAV.addin not found in %PLUGIN_SOURCE%
-    echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
+if "!HAS_ANY_SOURCE!"=="0" (
+    echo ERROR: No plugin payload found.
+    echo Expected one of:
+    echo   %PLUGIN_ROOT%\^<year^>\AutoNAV.dll + AutoNAV.addin   (per-version, preferred)
+    echo   %PLUGIN_ROOT%\AutoNAV.dll + AutoNAV.addin            (legacy single-version)
     pause
     exit /b 1
 )
@@ -95,16 +99,26 @@ if not exist "!NW_INSTALL_DIR!" (
     goto :eof
 )
 
+REM Per-version source if available, else fall back to legacy single-folder layout.
+set "PLUGIN_SOURCE=%PLUGIN_ROOT%\%NW_VERSION%"
+if not exist "!PLUGIN_SOURCE!\AutoNAV.dll" (
+    set "PLUGIN_SOURCE=%PLUGIN_ROOT%"
+)
+if not exist "!PLUGIN_SOURCE!\AutoNAV.dll" (
+    echo  [!] Navisworks %NW_VERSION% -- no source DLL found in Plugin\%NW_VERSION%\ or Plugin\
+    goto :eof
+)
+
 REM Plugin destination: ProgramData\...\Plugins\AutoNAV\ (works for all versions 2024-2027)
 set "DEST=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV"
 
 if not exist "!DEST!" mkdir "!DEST!"
 
 REM ---- Track A (required): DLL + .addin (+ optional PDB) ----
-copy /Y "%PLUGIN_SOURCE%\AutoNAV.dll"   "!DEST!\AutoNAV.dll"   >nul 2>&1
-copy /Y "%PLUGIN_SOURCE%\AutoNAV.addin" "!DEST!\AutoNAV.addin" >nul 2>&1
-if exist "%PLUGIN_SOURCE%\AutoNAV.pdb" (
-    copy /Y "%PLUGIN_SOURCE%\AutoNAV.pdb" "!DEST!\AutoNAV.pdb" >nul 2>&1
+copy /Y "!PLUGIN_SOURCE!\AutoNAV.dll"   "!DEST!\AutoNAV.dll"   >nul 2>&1
+copy /Y "!PLUGIN_SOURCE!\AutoNAV.addin" "!DEST!\AutoNAV.addin" >nul 2>&1
+if exist "!PLUGIN_SOURCE!\AutoNAV.pdb" (
+    copy /Y "!PLUGIN_SOURCE!\AutoNAV.pdb" "!DEST!\AutoNAV.pdb" >nul 2>&1
 )
 
 if errorlevel 1 (
@@ -113,24 +127,27 @@ if errorlevel 1 (
 )
 
 REM ---- Track B (optional): RibbonLayout XAML, en-US strings, Images icons ----
-REM Copied only if present in the Plugin source folder. Required by Navisworks only
-REM when the plugin uses CommandHandlerPlugin with a custom ribbon tab.
+REM Copied only if present in the per-version source folder, then falling back to
+REM the root Plugin\ folder.  Required by Navisworks only when the plugin uses
+REM CommandHandlerPlugin with a custom ribbon tab.
 set "TRACKB_EXTRA="
+set "RIBBON_SRC=!PLUGIN_SOURCE!"
+if not exist "!RIBBON_SRC!\AutoNAV.xaml" if exist "%PLUGIN_ROOT%\AutoNAV.xaml" set "RIBBON_SRC=%PLUGIN_ROOT%"
 
-if exist "%PLUGIN_SOURCE%\AutoNAV.xaml" (
-    copy /Y "%PLUGIN_SOURCE%\AutoNAV.xaml" "!DEST!\AutoNAV.xaml" >nul 2>&1
+if exist "!RIBBON_SRC!\AutoNAV.xaml" (
+    copy /Y "!RIBBON_SRC!\AutoNAV.xaml" "!DEST!\AutoNAV.xaml" >nul 2>&1
     set "TRACKB_EXTRA=!TRACKB_EXTRA! AutoNAV.xaml"
 )
 
-if exist "%PLUGIN_SOURCE%\en-US" (
+if exist "!RIBBON_SRC!\en-US" (
     if not exist "!DEST!\en-US" mkdir "!DEST!\en-US"
-    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\en-US" "!DEST!\en-US" >nul 2>&1
+    xcopy /Y /E /I /Q "!RIBBON_SRC!\en-US" "!DEST!\en-US" >nul 2>&1
     set "TRACKB_EXTRA=!TRACKB_EXTRA! en-US\"
 )
 
-if exist "%PLUGIN_SOURCE%\Images" (
+if exist "!RIBBON_SRC!\Images" (
     if not exist "!DEST!\Images" mkdir "!DEST!\Images"
-    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\Images" "!DEST!\Images" >nul 2>&1
+    xcopy /Y /E /I /Q "!RIBBON_SRC!\Images" "!DEST!\Images" >nul 2>&1
     set "TRACKB_EXTRA=!TRACKB_EXTRA! Images\"
 )
 

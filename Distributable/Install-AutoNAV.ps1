@@ -67,17 +67,55 @@ function Get-PluginInstallPath {
     return "C:\ProgramData\Autodesk\Navisworks Manage $Version\Plugins\AutoNAV"
 }
 
+function Resolve-PerVersionSource {
+    param(
+        [string]$Version,
+        [string]$ScriptDir
+    )
+    # Preference order:
+    #   1. <ScriptDir>\<year>\AutoNAV.dll                          (per-version next to installer)
+    #   2. <ScriptDir>\AutoNAV_v3.0.0\Plugin\<year>\AutoNAV.dll    (per-version classic layout)
+    #   3. <ScriptDir>\AutoNAV.dll                                 (legacy single-version)
+    #   4. <ScriptDir>\AutoNAV_v3.0.0\Plugin\AutoNAV.dll           (legacy classic layout)
+    $candidates = @(
+        (Join-Path $ScriptDir $Version),
+        (Join-Path $ScriptDir ("AutoNAV_v3.0.0\Plugin\" + $Version)),
+        $ScriptDir,
+        (Join-Path $ScriptDir "AutoNAV_v3.0.0\Plugin")
+    )
+    foreach ($dir in $candidates) {
+        $dll   = Join-Path $dir "AutoNAV.dll"
+        $addin = Join-Path $dir "AutoNAV.addin"
+        if ((Test-Path $dll) -and (Test-Path $addin)) {
+            return [pscustomobject]@{
+                Dir   = $dir
+                Dll   = $dll
+                Addin = $addin
+                Pdb   = (Join-Path $dir "AutoNAV.pdb")
+            }
+        }
+    }
+    return $null
+}
+
 function Install-ToVersion {
     param(
         [string]$Version,
-        [string]$SourceDir,
-        [string]$DllFile,
-        [string]$AddinFile,
-        [string]$PdbFile
+        [string]$ScriptDir
     )
 
     $installDir = Get-NavisworksInstallDir -Version $Version
     if (-not $installDir) { return $false }
+
+    $src = Resolve-PerVersionSource -Version $Version -ScriptDir $ScriptDir
+    if (-not $src) {
+        Write-ColorOutput ("  [!] Navisworks " + $Version + " -- no source DLL found in " + $Version + "\, AutoNAV_v3.0.0\Plugin\" + $Version + "\, or script root") -Type Error
+        return $false
+    }
+    $SourceDir = $src.Dir
+    $DllFile   = $src.Dll
+    $AddinFile = $src.Addin
+    $PdbFile   = $src.Pdb
 
     Write-ColorOutput ("  Installing to Navisworks Manage " + $Version + "...") -Type Info
 
@@ -202,15 +240,18 @@ function Install-AutoNAV {
     }
 
     $scriptPath = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-    $dllFile    = Join-Path $scriptPath "AutoNAV.dll"
-    $addinFile  = Join-Path $scriptPath "AutoNAV.addin"
-    $pdbFile    = Join-Path $scriptPath "AutoNAV.pdb"
 
-    $missing = @()
-    if (-not (Test-Path $dllFile))   { $missing += "AutoNAV.dll" }
-    if (-not (Test-Path $addinFile)) { $missing += "AutoNAV.addin" }
-    if ($missing.Count -gt 0) {
-        Write-ColorOutput ("ERROR: Missing files: " + ($missing -join ', ')) -Type Error
+    # Verify at least one source location is populated.
+    $anySource = $false
+    foreach ($v in $SupportedVersions) {
+        if (Resolve-PerVersionSource -Version $v -ScriptDir $scriptPath) { $anySource = $true; break }
+    }
+    if (-not $anySource) {
+        Write-ColorOutput "ERROR: No plugin payload found." -Type Error
+        Write-ColorOutput "Expected one of these layouts next to this script:" -Type Warning
+        Write-ColorOutput "  .\<year>\AutoNAV.dll + AutoNAV.addin                  (per-version)" -Type Warning
+        Write-ColorOutput "  .\AutoNAV_v3.0.0\Plugin\<year>\AutoNAV.dll + .addin   (per-version, classic)" -Type Warning
+        Write-ColorOutput "  .\AutoNAV.dll + AutoNAV.addin                         (legacy single-version)" -Type Warning
         exit 1
     }
     Write-ColorOutput "[+] Installer files found`n" -Type Success
@@ -233,7 +274,7 @@ function Install-AutoNAV {
 
     foreach ($ver in $SupportedVersions) {
         try {
-            $ok = Install-ToVersion -Version $ver -SourceDir $scriptPath -DllFile $dllFile -AddinFile $addinFile -PdbFile $pdbFile
+            $ok = Install-ToVersion -Version $ver -ScriptDir $scriptPath
             if ($ok) { $installed += $ver } else { $skipped += $ver }
         } catch {
             Write-ColorOutput ("  [!] Navisworks " + $ver + " -- error: " + $_) -Type Error

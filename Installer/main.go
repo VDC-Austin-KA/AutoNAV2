@@ -1,14 +1,15 @@
 // AutoNAV All-in-One Installer (Windows .exe)
 //
 // Single-file Windows installer for the AutoNAV Navisworks Manage plugin.
-// Carries AutoNAV.dll and AutoNAV.addin as embedded resources.  On launch:
+// Carries one AutoNAV.dll + AutoNAV.addin pair *per supported Navisworks
+// version* (2024, 2025, 2026, 2027), embedded at compile time.  On launch:
 //
-//  1. If not running elevated, self-relaunches via UAC ("Run as administrator"
-//     prompt appears), then exits the non-elevated instance.
+//  1. If not running elevated, self-relaunches via UAC, then exits the
+//     non-elevated instance.
 //  2. Closes Navisworks if it's running so the DLL isn't locked.
 //  3. Detects every installed Navisworks Manage 2024-2027.
-//  4. For each, writes AutoNAV.dll + AutoNAV.addin into
-//     C:\ProgramData\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\,
+//  4. For each, writes that version's matching AutoNAV.dll + AutoNAV.addin
+//     into C:\ProgramData\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\,
 //     backing up any existing files into Backup_<timestamp>\ first.
 //  5. Prints a summary and pauses so the user can read it.
 //
@@ -17,7 +18,7 @@ package main
 
 import (
 	"bufio"
-	_ "embed"
+	"embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,15 +27,15 @@ import (
 	"time"
 )
 
-//go:embed payload/AutoNAV.dll
-var autoNAVDll []byte
-
-//go:embed payload/AutoNAV.addin
-var autoNAVAddin []byte
+//go:embed payload/2024/AutoNAV.dll payload/2024/AutoNAV.addin
+//go:embed payload/2025/AutoNAV.dll payload/2025/AutoNAV.addin
+//go:embed payload/2026/AutoNAV.dll payload/2026/AutoNAV.addin
+//go:embed payload/2027/AutoNAV.dll payload/2027/AutoNAV.addin
+var payloads embed.FS
 
 var supportedVersions = []string{"2024", "2025", "2026", "2027"}
 
-const version = "3.0.0"
+const version = "3.1.0"
 
 func main() {
 	if !isAdmin() {
@@ -44,7 +45,6 @@ func main() {
 			pause()
 			os.Exit(1)
 		}
-		// Original (non-elevated) process exits; the elevated copy takes over.
 		return
 	}
 
@@ -54,8 +54,7 @@ func main() {
 }
 
 // isAdmin returns true when the current process can open \\.\PHYSICALDRIVE0,
-// which on Windows requires administrator privileges.  This is the standard
-// cheap admin-check that needs no external dependencies.
+// which on Windows requires administrator privileges.
 func isAdmin() bool {
 	f, err := os.Open(`\\.\PHYSICALDRIVE0`)
 	if err == nil {
@@ -72,8 +71,6 @@ func relaunchAsAdmin() error {
 	if err != nil {
 		return err
 	}
-	// PowerShell's quoting: wrap the exe path in single quotes and double-up
-	// any literal single quote in the path.
 	psExe := strings.ReplaceAll(exe, "'", "''")
 	return exec.Command(
 		"powershell.exe", "-NoProfile", "-Command",
@@ -128,6 +125,7 @@ func banner() {
 	fmt.Println("===============================================================================")
 	fmt.Printf("              AutoNAV All-in-One Installer  v%s\n", version)
 	fmt.Println("         Targets: Navisworks Manage 2024 / 2025 / 2026 / 2027")
+	fmt.Println("         (per-version DLL selected automatically)")
 	fmt.Println("===============================================================================")
 	fmt.Println()
 }
@@ -164,6 +162,15 @@ func installToVersion(version string) (bool, error) {
 		return false, nil
 	}
 
+	dll, err := payloads.ReadFile("payload/" + version + "/AutoNAV.dll")
+	if err != nil {
+		return false, fmt.Errorf("read embedded DLL for %s: %w", version, err)
+	}
+	addin, err := payloads.ReadFile("payload/" + version + "/AutoNAV.addin")
+	if err != nil {
+		return false, fmt.Errorf("read embedded addin for %s: %w", version, err)
+	}
+
 	dest := fmt.Sprintf(`C:\ProgramData\Autodesk\Navisworks Manage %s\Plugins\AutoNAV`, version)
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return false, fmt.Errorf("create %s: %w", dest, err)
@@ -187,15 +194,15 @@ func installToVersion(version string) (bool, error) {
 		}
 	}
 
-	if err := os.WriteFile(destDll, autoNAVDll, 0o644); err != nil {
+	if err := os.WriteFile(destDll, dll, 0o644); err != nil {
 		return false, fmt.Errorf("write AutoNAV.dll: %w", err)
 	}
-	if err := os.WriteFile(destAddin, autoNAVAddin, 0o644); err != nil {
+	if err := os.WriteFile(destAddin, addin, 0o644); err != nil {
 		return false, fmt.Errorf("write AutoNAV.addin: %w", err)
 	}
 
 	fmt.Printf("  [+] Navisworks %s -- installed (%d KB) -> %s\n",
-		version, (len(autoNAVDll)+1023)/1024, dest)
+		version, (len(dll)+1023)/1024, dest)
 	return true, nil
 }
 
