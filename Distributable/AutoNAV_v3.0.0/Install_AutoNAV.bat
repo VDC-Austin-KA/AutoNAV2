@@ -2,6 +2,17 @@
 REM AutoNAV v3.0.0 - Installation Script
 REM Installs to ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
 REM Plugin path: C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
+REM
+REM Files copied to each version's Plugins\AutoNAV\ folder:
+REM   Track A (AddInPlugin - required):
+REM     - AutoNAV.dll
+REM     - AutoNAV.addin
+REM     - AutoNAV.pdb     (optional, debug symbols)
+REM   Track B (CommandHandlerPlugin - copied only if present in .\Plugin\):
+REM     - AutoNAV.xaml    (RibbonLayout XAML for a custom ribbon tab)
+REM     - en-US\          (localized XAML + .name strings)
+REM     - Images\         (PNG icons referenced by the XAML)
+REM See NAVISWORKS_PLUGIN_REQUIREMENTS.md at the repo root for the full reference.
 
 setlocal enabledelayedexpansion
 
@@ -89,6 +100,7 @@ set "DEST=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV
 
 if not exist "!DEST!" mkdir "!DEST!"
 
+REM ---- Track A (required): DLL + .addin (+ optional PDB) ----
 copy /Y "%PLUGIN_SOURCE%\AutoNAV.dll"   "!DEST!\AutoNAV.dll"   >nul 2>&1
 copy /Y "%PLUGIN_SOURCE%\AutoNAV.addin" "!DEST!\AutoNAV.addin" >nul 2>&1
 if exist "%PLUGIN_SOURCE%\AutoNAV.pdb" (
@@ -97,13 +109,37 @@ if exist "%PLUGIN_SOURCE%\AutoNAV.pdb" (
 
 if errorlevel 1 (
     echo  [!] Navisworks %NW_VERSION% -- copy failed, check permissions
+    goto :eof
+)
+
+REM ---- Track B (optional): RibbonLayout XAML, en-US strings, Images icons ----
+REM Copied only if present in the Plugin source folder. Required by Navisworks only
+REM when the plugin uses CommandHandlerPlugin with a custom ribbon tab.
+set "TRACKB_EXTRA="
+
+if exist "%PLUGIN_SOURCE%\AutoNAV.xaml" (
+    copy /Y "%PLUGIN_SOURCE%\AutoNAV.xaml" "!DEST!\AutoNAV.xaml" >nul 2>&1
+    set "TRACKB_EXTRA=!TRACKB_EXTRA! AutoNAV.xaml"
+)
+
+if exist "%PLUGIN_SOURCE%\en-US" (
+    if not exist "!DEST!\en-US" mkdir "!DEST!\en-US"
+    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\en-US" "!DEST!\en-US" >nul 2>&1
+    set "TRACKB_EXTRA=!TRACKB_EXTRA! en-US\"
+)
+
+if exist "%PLUGIN_SOURCE%\Images" (
+    if not exist "!DEST!\Images" mkdir "!DEST!\Images"
+    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\Images" "!DEST!\Images" >nul 2>&1
+    set "TRACKB_EXTRA=!TRACKB_EXTRA! Images\"
+)
+
+echo  [+] Navisworks %NW_VERSION% -- installed to !DEST!
+if not "!TRACKB_EXTRA!"=="" echo      + ribbon assets:!TRACKB_EXTRA!
+set /a INSTALLED_COUNT+=1
+if "!INSTALLED_VERSIONS!"=="" (
+    set "INSTALLED_VERSIONS=%NW_VERSION%"
 ) else (
-    echo  [+] Navisworks %NW_VERSION% -- installed to !DEST!
-    set /a INSTALLED_COUNT+=1
-    if "!INSTALLED_VERSIONS!"=="" (
-        set "INSTALLED_VERSIONS=%NW_VERSION%"
-    ) else (
-        set "INSTALLED_VERSIONS=!INSTALLED_VERSIONS!, %NW_VERSION%"
-    )
+    set "INSTALLED_VERSIONS=!INSTALLED_VERSIONS!, %NW_VERSION%"
 )
 goto :eof

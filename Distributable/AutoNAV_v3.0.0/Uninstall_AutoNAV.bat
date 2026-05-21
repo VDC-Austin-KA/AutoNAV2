@@ -57,10 +57,17 @@ set "PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\A
 REM Legacy path: Program Files\...\AddIns\ (used by older AutoNAV installs)
 set "ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
 
+REM ---- Track A files ----
 if exist "!PLUGIN_DIR!\AutoNAV.dll"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
 if exist "!PLUGIN_DIR!\AutoNAV.addin" ( del /F /Q "!PLUGIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
 if exist "!PLUGIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
 
+REM ---- Track B files (CommandHandlerPlugin assets, if previously installed) ----
+if exist "!PLUGIN_DIR!\AutoNAV.xaml" ( del /F /Q "!PLUGIN_DIR!\AutoNAV.xaml" >nul 2>&1 & set FOUND=1 )
+if exist "!PLUGIN_DIR!\en-US"        ( rd /S /Q  "!PLUGIN_DIR!\en-US"        >nul 2>&1 & set FOUND=1 )
+if exist "!PLUGIN_DIR!\Images"       ( rd /S /Q  "!PLUGIN_DIR!\Images"       >nul 2>&1 & set FOUND=1 )
+
+REM ---- Legacy AddIns location from earlier AutoNAV releases ----
 if exist "!ADDIN_DIR!\AutoNAV.dll"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
 if exist "!ADDIN_DIR!\AutoNAV.addin" ( del /F /Q "!ADDIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
 if exist "!ADDIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
