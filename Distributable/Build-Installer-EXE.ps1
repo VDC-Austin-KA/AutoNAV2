@@ -1,23 +1,23 @@
 ################################################################################
-# Build-Installer-EXE.ps1
+# Build-Installer-EXE.ps1  (single-DLL convenience build, bundle format)
 #
-# Regenerates Distributable\AutoNAV-Installer.exe - a single-file, double-click,
-# self-elevating Windows .exe installer for AutoNAV.  Run this on a Windows
-# machine after rebuilding AutoNAV.dll.
+# Regenerates Distributable\AutoNAV-Installer.exe from a SINGLE AutoNAV.dll by
+# replicating that DLL into every Installer\payload\AutoNAV.bundle\Contents\V##\
+# subfolder before linking.  Use this when you only have one Navisworks
+# installed and just want a functional installer for testing.
+#
+# For a CORRECT multi-version build (a separately-compiled DLL per Navisworks
+# year), use Build-MultiVersion.ps1 instead.
 #
 # Requirements:
 #   - Go installed and on PATH        https://go.dev/dl/
 #
 # Inputs:
-#   - Distributable\AutoNAV.dll       (copied into Installer\payload\)
-#   - Distributable\AutoNAV.addin     (copied into Installer\payload\)
+#   - Distributable\AutoNAV.dll       (replicated into bundle\Contents\V24..V27\)
+#   - Distributable\AutoNAV.addin
 #
 # Output:
 #   - Distributable\AutoNAV-Installer.exe   (~2 MB, single file; distribute as-is)
-#
-# If Go is not available, use Build-Installer.ps1 instead to produce
-# AutoNAV-Installer.cmd, which has identical behavior in 141 KB without any
-# build tooling beyond what's bundled with Windows.
 ################################################################################
 
 [CmdletBinding()]
@@ -32,22 +32,26 @@ if (-not (Get-Command 'go' -ErrorAction SilentlyContinue)) {
 }
 
 $installerDir = Join-Path $RepoRoot 'Installer'
-$payloadDir   = Join-Path $installerDir 'payload'
+$bundleRoot   = Join-Path $installerDir 'payload\AutoNAV.bundle'
+$contentsRoot = Join-Path $bundleRoot 'Contents'
 $distDir      = Join-Path $RepoRoot 'Distributable'
 
 foreach ($p in @(
     (Join-Path $distDir 'AutoNAV.dll'),
-    (Join-Path $distDir 'AutoNAV.addin')
+    (Join-Path $distDir 'AutoNAV.addin'),
+    (Join-Path $bundleRoot 'PackageContents.xml')
 )) {
     if (-not (Test-Path -LiteralPath $p)) { throw "Missing input file: $p" }
 }
 
-if (-not (Test-Path -LiteralPath $payloadDir)) {
-    New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
+foreach ($sub in @('V24','V25','V26','V27')) {
+    $subDir = Join-Path $contentsRoot $sub
+    if (-not (Test-Path -LiteralPath $subDir)) {
+        New-Item -ItemType Directory -Path $subDir -Force | Out-Null
+    }
+    Copy-Item (Join-Path $distDir 'AutoNAV.dll')   (Join-Path $subDir 'AutoNAV.dll')   -Force
+    Copy-Item (Join-Path $distDir 'AutoNAV.addin') (Join-Path $subDir 'AutoNAV.addin') -Force
 }
-
-Copy-Item (Join-Path $distDir 'AutoNAV.dll')   (Join-Path $payloadDir 'AutoNAV.dll')   -Force
-Copy-Item (Join-Path $distDir 'AutoNAV.addin') (Join-Path $payloadDir 'AutoNAV.addin') -Force
 
 $outFile = Join-Path $distDir 'AutoNAV-Installer.exe'
 
@@ -65,5 +69,5 @@ try {
 
 $outSize = (Get-Item $outFile).Length
 Write-Host ("Wrote {0} ({1:N0} bytes)" -f $outFile, $outSize) -ForegroundColor Green
-Write-Host "  Embedded AutoNAV.dll  : $((Get-Item (Join-Path $distDir 'AutoNAV.dll')).Length) bytes raw"
-Write-Host "  Embedded AutoNAV.addin: $((Get-Item (Join-Path $distDir 'AutoNAV.addin')).Length) bytes raw"
+Write-Host "  Bundle staged at: $bundleRoot"
+Write-Host "  PackageContents.xml controls per-version DLL routing inside the bundle."

@@ -50,7 +50,7 @@ namespace AutoNAV
                     DocumentClash documentClash = doc.GetClash();
                     if (documentClash != null && documentClash.TestsData != null)
                     {
-                        foreach (ClashTest test in documentClash.TestsData.Tests)
+                        foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
                         {
                             cmbClashTest.Items.Add(new ComboBoxItem 
                             { 
@@ -555,7 +555,7 @@ namespace AutoNAV
                 }
 
                 ClashTest selectedTest = null;
-                foreach (ClashTest test in documentClash.TestsData.Tests)
+                foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
                 {
                     if (test.DisplayName == testName)
                     {
@@ -617,7 +617,7 @@ namespace AutoNAV
                     return;
                 }
 
-                var tests = documentClash.TestsData.Tests;
+                var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
                 if (tests.Count == 0)
                 {
                     MessageBox.Show("No clash tests found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -680,7 +680,7 @@ namespace AutoNAV
                 }
 
                 ClashTest selectedTest = null;
-                foreach (ClashTest test in documentClash.TestsData.Tests)
+                foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
                 {
                     if (test.DisplayName == testName)
                     {

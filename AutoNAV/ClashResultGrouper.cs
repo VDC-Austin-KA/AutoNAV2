@@ -64,7 +64,7 @@ namespace AutoNAV
                 if (doc == null) return "No active document.";
 
                 DocumentClash docClash = doc.GetClash();
-                if (docClash?.TestsData?.Tests == null)
+                if (docClash?.TestsData == null || ClashCompat.GetTopLevelTests(docClash.TestsData) == null)
                     return "Clash module not available or no tests exist.";
 
                 // Step 1: For each selected search set, run its Search to get matching ModelItems
@@ -92,7 +92,7 @@ namespace AutoNAV
                 int totalGrouped = 0;
                 int totalResults = 0;
 
-                foreach (ClashTest test in docClash.TestsData.Tests)
+                foreach (ClashTest test in ClashCompat.EnumerateTests(docClash.TestsData))
                 {
                     testCount++;
                     string testName = test.DisplayName.Trim();

@@ -117,7 +117,7 @@ namespace AutoNAV
 
                             if (test != null)
                             {
-                                documentClash.TestsData.TestsAddCopy(test);
+                                ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, test);
                                 LogMessage(string.Format("Created: {0}", testName));
                                 createdCount++;
                             }
@@ -273,7 +273,7 @@ namespace AutoNAV
 
                                 if (test != null)
                                 {
-                                    documentClash.TestsData.TestsAddCopy(test);
+                                    ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, test);
                                     LogMessage(string.Format("Created: {0}", testName));
                                     createdCount++;
                                 }
@@ -331,7 +331,7 @@ namespace AutoNAV
                     return;
                 }
 
-                var tests = documentClash.TestsData.Tests;
+                var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
                 if (tests.Count == 0)
                 {
                     ShowError("No clash tests found.\n\nPlease run Function 4 first.");
@@ -665,7 +665,7 @@ namespace AutoNAV
         {
             try
             {
-                foreach (ClashTest test in documentClash.TestsData.Tests)
+                foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
                 {
                     if (test.DisplayName.Trim().Equals(testName, StringComparison.OrdinalIgnoreCase))
                     {
@@ -862,7 +862,7 @@ namespace AutoNAV
                         var test1 = CreateClashTestWithSources(testName1, leftPrecursorSources, rightPrecursorSources);
                         if (test1 != null)
                         {
-                            documentClash.TestsData.TestsAddCopy(test1);
+                            ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, test1);
                             LogMessage(string.Format("Created (Grouped): {0}", testName1));
                             created++;
                             groupedCount++;
@@ -886,7 +886,7 @@ namespace AutoNAV
                             var test2 = CreateClashTestWithSources(testName2, leftPrecursorSources, rightNonPrecursor);
                             if (test2 != null)
                             {
-                                documentClash.TestsData.TestsAddCopy(test2);
+                                ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, test2);
                                 LogMessage(string.Format("Created (Grouped): {0}", testName2));
                                 created++;
                                 groupedCount++;
@@ -910,7 +910,7 @@ namespace AutoNAV
                             var test3 = CreateClashTestWithSources(testName3, leftNonPrecursor, rightPrecursorSources);
                             if (test3 != null)
                             {
-                                documentClash.TestsData.TestsAddCopy(test3);
+                                ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, test3);
                                 LogMessage(string.Format("Created (Grouped): {0}", testName3));
                                 created++;
                                 groupedCount++;
@@ -929,7 +929,7 @@ namespace AutoNAV
                     var testRemainder = CreateClashTestFromDisciplineFolders(doc, testNameRemainder, leftFolder, rightFolder);
                     if (testRemainder != null)
                     {
-                        documentClash.TestsData.TestsAddCopy(testRemainder);
+                        ClashCompat.TestsAddCopyAtRoot(documentClash.TestsData, testRemainder);
                         LogMessage(string.Format("Created: {0}", testNameRemainder));
                         created++;
                     }

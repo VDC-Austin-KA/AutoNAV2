@@ -105,7 +105,7 @@ namespace AutoNAV
                 if (documentClash == null || documentClash.TestsData == null)
                     return "Clash Detective is not available or no tests exist.";
 
-                var allTests = documentClash.TestsData.Tests.Cast<ClashTest>().ToList();
+                var allTests = ClashCompat.GetTopLevelTests(documentClash.TestsData).OfType<ClashTest>().ToList();
                 if (allTests.Count == 0)
                     return "No clash tests found.";
 
@@ -656,8 +656,8 @@ namespace AutoNAV
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
-                string prop = mode == GroupingMode.ApprovedBy ? copy.ApprovedBy
-                            : mode == GroupingMode.AssignedTo ? copy.AssignedTo
+                string prop = mode == GroupingMode.ApprovedBy ? ClashCompat.GetApprovedBy(copy)
+                            : mode == GroupingMode.AssignedTo ? ClashCompat.GetAssignedTo(copy)
                             : copy.Status.ToString();
 
                 if (string.IsNullOrEmpty(prop)) prop = "Unspecified";
@@ -794,13 +794,14 @@ namespace AutoNAV
             try
             {
                 DocumentClash docClash = Application.MainDocument.GetClash();
-                int idx = docClash.TestsData.Tests.IndexOf(selectedClashTest);
+                int idx = ClashCompat.IndexOfTest(docClash.TestsData, selectedClashTest);
                 if (idx < 0) return;
 
                 tx = Application.MainDocument.BeginTransaction("Group clashes");
 
                 // Replace the test with an empty copy to clear existing children
-                docClash.TestsData.TestsReplaceWithCopy(
+                ClashCompat.TestsReplaceAtRoot(
+                    docClash.TestsData,
                     idx, (ClashTest)selectedClashTest.CreateCopyWithoutChildren());
 
                 int totalItems = clashGroups.Sum(g => g.Children.Count) + ungroupedClashResults.Count;
@@ -813,11 +814,11 @@ namespace AutoNAV
 
                     // Step 1 — add the empty shell so the group exists in the document
                     docClash.TestsData.TestsAddCopy(
-                        (GroupItem)docClash.TestsData.Tests[idx],
+                        (GroupItem)ClashCompat.TestAt(docClash.TestsData, idx),
                         new ClashResultGroup { DisplayName = grp.DisplayName });
 
                     // Step 2 — walk back to find the live group reference (last ClashResultGroup)
-                    ClashTest liveTest = (ClashTest)docClash.TestsData.Tests[idx];
+                    ClashTest liveTest = (ClashTest)ClashCompat.TestAt(docClash.TestsData, idx);
                     ClashResultGroup liveGroup = null;
                     for (int i = liveTest.Children.Count - 1; i >= 0; i--)
                     {
@@ -843,7 +844,7 @@ namespace AutoNAV
                 foreach (ClashResult cr in ungroupedClashResults)
                 {
                     if (progressBar.IsCanceled) break;
-                    docClash.TestsData.TestsAddCopy((GroupItem)docClash.TestsData.Tests[idx], cr);
+                    docClash.TestsData.TestsAddCopy((GroupItem)ClashCompat.TestAt(docClash.TestsData, idx), cr);
                     progressBar.Update((double)++done / Math.Max(totalItems, 1));
                 }
 

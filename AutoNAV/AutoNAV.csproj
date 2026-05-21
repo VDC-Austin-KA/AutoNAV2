@@ -25,7 +25,7 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-  <!-- Release x64 -->
+  <!-- Release x64 (auto-detect Navisworks version: prefers newest installed) -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
@@ -35,13 +35,65 @@
     <WarningLevel>4</WarningLevel>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
-  <!-- Auto-detect Navisworks installation: prefers newest available (2027 → 2024) -->
-  <PropertyGroup>
+  <!-- Per-version Release configurations: each pins NWPath to one Navisworks year. -->
+  <!-- Build with: msbuild /p:Configuration=Release-NW2024 (or NW2025/NW2026/NW2027) -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2024|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2024\</OutputPath>
+    <DefineConstants>TRACE;NW2024</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2024\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2025|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2025\</OutputPath>
+    <DefineConstants>TRACE;NW2025</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2026|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2026\</OutputPath>
+    <DefineConstants>TRACE;NW2026</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2026\</NWPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release-NW2027|x64' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release-NW2027\</OutputPath>
+    <DefineConstants>TRACE;NW2027</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <PlatformTarget>x64</PlatformTarget>
+    <NWPath>C:\Program Files\Autodesk\Navisworks Manage 2027\</NWPath>
+  </PropertyGroup>
+  <!-- Default NWPath auto-detection: only used when Configuration != Release-NWxxxx -->
+  <PropertyGroup Condition=" '$(NWPath)' == '' ">
     <NWPath Condition="Exists('C:\Program Files\Autodesk\Navisworks Manage 2027\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2027\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2026\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2026\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2025\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2024\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2024\</NWPath>
     <NWPath Condition="'$(NWPath)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
+  </PropertyGroup>
+  <!-- Add the matching NW#### DefineConstant for the resolved NWPath so
+       ClashCompat.cs picks the right #if branch.  The per-version
+       Release-NWxxxx configs already set this explicitly above; this block
+       handles the auto-detect Release|x64 case. -->
+  <PropertyGroup>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2024\' AND !$(DefineConstants.Contains('NW2024'))">$(DefineConstants);NW2024</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2025\' AND !$(DefineConstants.Contains('NW2025'))">$(DefineConstants);NW2025</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2026\' AND !$(DefineConstants.Contains('NW2026'))">$(DefineConstants);NW2026</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2027\' AND !$(DefineConstants.Contains('NW2027'))">$(DefineConstants);NW2027</DefineConstants>
   </PropertyGroup>
   <!-- References -->
   <ItemGroup>
@@ -90,6 +142,7 @@
     <Compile Include="ClashTestGeneratorEngine.cs" />
     <Compile Include="ClashResultGrouper.cs" />
     <Compile Include="ClashGrouper.cs" />
+    <Compile Include="ClashCompat.cs" />
   </ItemGroup>
   <!-- XAML Pages -->
   <ItemGroup>

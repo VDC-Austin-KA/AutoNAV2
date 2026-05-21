@@ -1,86 +1,65 @@
 @echo off
-REM AutoNAV v3.0.0 - Uninstallation Script
-REM Removes AutoNAV from ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
-REM Cleans both the current plugin path and the legacy AddIns path
+REM AutoNAV v3.0.0 - Uninstallation Script (bundle format)
+REM Removes the AutoNAV.bundle from BOTH per-user and all-users
+REM ApplicationPlugins locations, plus any legacy installs from the old
+REM ProgramData\Navisworks Manage <year>\Plugins\AutoNAV\ paths.
 
 setlocal enabledelayedexpansion
 
 echo.
 echo ================================================================================
-echo                      AutoNAV v3.0.0 Uninstallation
-echo            Removes from: Navisworks Manage 2024 / 2025 / 2026 / 2027
+echo                     AutoNAV v3.0.0 Uninstallation
 echo ================================================================================
 echo.
 
-openfiles >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Administrator privileges required.
-    echo Please right-click this file and select "Run as administrator".
-    pause
-    exit /b 1
-)
-
 REM Close Navisworks if running
-tasklist /FI "IMAGENAME eq Navisworks*" 2>nul | find /I "Navisworks" >nul
+tasklist /FI "IMAGENAME eq Roamer.exe" 2>nul | find /I "Roamer.exe" >nul
 if not errorlevel 1 (
     echo Closing Navisworks...
-    taskkill /F /IM "Navisworks*" >nul 2>&1
+    taskkill /F /IM Roamer.exe >nul 2>&1
     timeout /t 2 /nobreak >nul
 )
 
-set REMOVED_COUNT=0
-set REMOVED_VERSIONS=
+set REMOVED=0
 
+REM Bundle in per-user ApplicationPlugins
+set "USER_BUNDLE=%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+if exist "%USER_BUNDLE%" (
+    echo Removing %USER_BUNDLE%
+    rmdir /S /Q "%USER_BUNDLE%"
+    set /a REMOVED+=1
+)
+
+REM Bundle in all-users ApplicationPlugins (if it was installed there)
+set "ALL_BUNDLE=%PROGRAMDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+if exist "%ALL_BUNDLE%" (
+    echo Removing %ALL_BUNDLE%
+    rmdir /S /Q "%ALL_BUNDLE%" 2>nul
+    if exist "%ALL_BUNDLE%" (
+        echo   [!] Could not remove all-users bundle.  Re-run elevated to clean up.
+    ) else (
+        set /a REMOVED+=1
+    )
+)
+
+REM Legacy per-version Plugins\AutoNAV\ folders (from pre-bundle installers)
 for %%V in (2024 2025 2026 2027) do (
-    call :TryRemove %%V
+    set "LEGACY=%PROGRAMDATA%\Autodesk\Navisworks Manage %%V\Plugins\AutoNAV"
+    if exist "!LEGACY!" (
+        echo Removing legacy folder !LEGACY!
+        rmdir /S /Q "!LEGACY!" 2>nul
+        if not exist "!LEGACY!" set /a REMOVED+=1
+    )
 )
 
 echo.
 echo ================================================================================
-if !REMOVED_COUNT! gtr 0 (
-    echo  AutoNAV removed from: Navisworks !REMOVED_VERSIONS!
+if !REMOVED! gtr 0 (
+    echo  AutoNAV removed.  !REMOVED! location^(s^) cleaned up.
 ) else (
-    echo  AutoNAV was not found in any Navisworks installation.
+    echo  AutoNAV was not found.  Nothing to do.
 )
 echo ================================================================================
 echo.
 pause
 exit /b 0
-
-:TryRemove
-set "NW_VERSION=%~1"
-set FOUND=0
-
-REM Current plugin path: ProgramData\...\Plugins\AutoNAV\
-set "PLUGIN_DIR=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV"
-
-REM Legacy path: Program Files\...\AddIns\ (used by older AutoNAV installs)
-set "ADDIN_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%\AddIns"
-
-REM ---- Track A files ----
-if exist "!PLUGIN_DIR!\AutoNAV.dll"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
-if exist "!PLUGIN_DIR!\AutoNAV.addin" ( del /F /Q "!PLUGIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
-if exist "!PLUGIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!PLUGIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
-
-REM ---- Track B files (CommandHandlerPlugin assets, if previously installed) ----
-if exist "!PLUGIN_DIR!\AutoNAV.xaml" ( del /F /Q "!PLUGIN_DIR!\AutoNAV.xaml" >nul 2>&1 & set FOUND=1 )
-if exist "!PLUGIN_DIR!\en-US"        ( rd /S /Q  "!PLUGIN_DIR!\en-US"        >nul 2>&1 & set FOUND=1 )
-if exist "!PLUGIN_DIR!\Images"       ( rd /S /Q  "!PLUGIN_DIR!\Images"       >nul 2>&1 & set FOUND=1 )
-
-REM ---- Legacy AddIns location from earlier AutoNAV releases ----
-if exist "!ADDIN_DIR!\AutoNAV.dll"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.dll"   >nul 2>&1 & set FOUND=1 )
-if exist "!ADDIN_DIR!\AutoNAV.addin" ( del /F /Q "!ADDIN_DIR!\AutoNAV.addin" >nul 2>&1 & set FOUND=1 )
-if exist "!ADDIN_DIR!\AutoNAV.pdb"   ( del /F /Q "!ADDIN_DIR!\AutoNAV.pdb"   >nul 2>&1 )
-
-if !FOUND! equ 1 (
-    echo  [+] Navisworks %NW_VERSION% -- removed
-    set /a REMOVED_COUNT+=1
-    if "!REMOVED_VERSIONS!"=="" (
-        set "REMOVED_VERSIONS=%NW_VERSION%"
-    ) else (
-        set "REMOVED_VERSIONS=!REMOVED_VERSIONS!, %NW_VERSION%"
-    )
-) else (
-    echo  [--] Navisworks %NW_VERSION% -- not installed, skipped
-)
-goto :eof

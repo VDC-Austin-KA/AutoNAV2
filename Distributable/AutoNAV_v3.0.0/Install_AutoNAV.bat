@@ -1,79 +1,78 @@
 @echo off
-REM AutoNAV v3.0.0 - Installation Script
-REM Installs to ALL detected Navisworks Manage versions (2024 / 2025 / 2026 / 2027)
-REM Plugin path: C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
+REM AutoNAV v3.0.0 - Installation Script (bundle format)
+REM Copies AutoNAV.bundle\ into:
+REM   %APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
 REM
-REM Files copied to each version's Plugins\AutoNAV\ folder:
-REM   Track A (AddInPlugin - required):
-REM     - AutoNAV.dll
-REM     - AutoNAV.addin
-REM     - AutoNAV.pdb     (optional, debug symbols)
-REM   Track B (CommandHandlerPlugin - copied only if present in .\Plugin\):
-REM     - AutoNAV.xaml    (RibbonLayout XAML for a custom ribbon tab)
-REM     - en-US\          (localized XAML + .name strings)
-REM     - Images\         (PNG icons referenced by the XAML)
-REM See NAVISWORKS_PLUGIN_REQUIREMENTS.md at the repo root for the full reference.
+REM PackageContents.xml inside the bundle tells Navisworks 2024 / 2025 / 2026 /
+REM 2027 which per-version DLL under Contents\V24..V27\ to load.
+REM
+REM This is per-user (no admin required).  For all-users install, use the
+REM PowerShell installer with -AllUsers.
 
 setlocal enabledelayedexpansion
 
 echo.
 echo ================================================================================
-echo                        AutoNAV v3.0.0 Installation
-echo            Supports: Navisworks Manage 2024 / 2025 / 2026 / 2027
+echo                     AutoNAV v3.0.0 Installation (bundle)
+echo            Targets: Navisworks Manage 2024 / 2025 / 2026 / 2027
+echo            Install path: %%APPDATA%%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
 echo ================================================================================
 echo.
 
-REM Require admin
-openfiles >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Administrator privileges required.
-    echo Please right-click this file and select "Run as administrator".
-    pause
-    exit /b 1
-)
-
 set "SCRIPT_DIR=%~dp0"
-set "PLUGIN_SOURCE=%SCRIPT_DIR%Plugin"
+set "BUNDLE_SRC=%SCRIPT_DIR%AutoNAV.bundle"
 
-if not exist "%PLUGIN_SOURCE%\AutoNAV.dll" (
-    echo ERROR: AutoNAV.dll not found in %PLUGIN_SOURCE%
-    echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
-    pause
-    exit /b 1
-)
-
-if not exist "%PLUGIN_SOURCE%\AutoNAV.addin" (
-    echo ERROR: AutoNAV.addin not found in %PLUGIN_SOURCE%
-    echo Please ensure the Plugin folder contains AutoNAV.dll and AutoNAV.addin.
+if not exist "%BUNDLE_SRC%\PackageContents.xml" (
+    echo ERROR: Bundle source not found.
+    echo Expected: %BUNDLE_SRC%\PackageContents.xml
     pause
     exit /b 1
 )
 
 REM Close Navisworks if running
-tasklist /FI "IMAGENAME eq Navisworks*" 2>nul | find /I "Navisworks" >nul
+tasklist /FI "IMAGENAME eq Roamer.exe" 2>nul | find /I "Roamer.exe" >nul
 if not errorlevel 1 (
     echo Closing Navisworks...
-    taskkill /F /IM "Navisworks*" >nul 2>&1
+    taskkill /F /IM Roamer.exe >nul 2>&1
     timeout /t 2 /nobreak >nul
 )
 
-set INSTALLED_COUNT=0
-set INSTALLED_VERSIONS=
+set "DEST_ROOT=%APPDATA%\Autodesk\ApplicationPlugins"
+set "DEST_BUNDLE=%DEST_ROOT%\AutoNAV.bundle"
 
-REM ---- Try each supported version ----
-for %%V in (2024 2025 2026 2027) do (
-    call :TryInstall %%V
+if not exist "%DEST_ROOT%" mkdir "%DEST_ROOT%"
+
+REM Back up any existing bundle
+if exist "%DEST_BUNDLE%" (
+    set "STAMP=%DATE:~10,4%%DATE:~4,2%%DATE:~7,2%_%TIME:~0,2%%TIME:~3,2%%TIME:~6,2%"
+    set "STAMP=!STAMP: =0!"
+    echo Backing up existing bundle to %DEST_BUNDLE%.backup_!STAMP!
+    move /Y "%DEST_BUNDLE%" "%DEST_BUNDLE%.backup_!STAMP!" >nul
+)
+
+echo Copying bundle to %DEST_BUNDLE% ...
+xcopy /Y /E /I /Q "%BUNDLE_SRC%" "%DEST_BUNDLE%" >nul
+if errorlevel 1 (
+    echo ERROR: Failed to copy bundle.  Check permissions on %DEST_ROOT%.
+    pause
+    exit /b 1
 )
 
 echo.
 echo ================================================================================
-if !INSTALLED_COUNT! gtr 0 (
-    echo  Installation successful!
-    echo  Installed to: Navisworks !INSTALLED_VERSIONS!
-) else (
-    echo  ERROR: No compatible Navisworks installation found.
-    echo  Install Navisworks Manage 2024, 2025, 2026, or 2027 and try again.
-)
+echo  Installation complete!
+echo.
+echo  Bundle installed at:
+echo    %DEST_BUNDLE%
+echo.
+echo  Layout:
+echo    AutoNAV.bundle\
+echo    +-- PackageContents.xml      (multi-version manifest)
+echo    +-- Contents\
+echo        +-- V24\AutoNAV.dll + AutoNAV.addin    (Navisworks 2024)
+echo        +-- V25\AutoNAV.dll + AutoNAV.addin    (Navisworks 2025)
+echo        +-- V26\AutoNAV.dll + AutoNAV.addin    (Navisworks 2026)
+echo        +-- V27\AutoNAV.dll + AutoNAV.addin    (Navisworks 2027)
 echo ================================================================================
 echo.
 echo Next steps:
@@ -83,63 +82,3 @@ echo  3. Click AutoNAV to begin
 echo.
 pause
 exit /b 0
-
-REM ---- Subroutine: install to one version ----
-:TryInstall
-set "NW_VERSION=%~1"
-set "NW_INSTALL_DIR=C:\Program Files\Autodesk\Navisworks Manage %NW_VERSION%"
-
-REM Navisworks must be installed to proceed
-if not exist "!NW_INSTALL_DIR!" (
-    echo  [--] Navisworks %NW_VERSION% not found -- skipped
-    goto :eof
-)
-
-REM Plugin destination: ProgramData\...\Plugins\AutoNAV\ (works for all versions 2024-2027)
-set "DEST=C:\ProgramData\Autodesk\Navisworks Manage %NW_VERSION%\Plugins\AutoNAV"
-
-if not exist "!DEST!" mkdir "!DEST!"
-
-REM ---- Track A (required): DLL + .addin (+ optional PDB) ----
-copy /Y "%PLUGIN_SOURCE%\AutoNAV.dll"   "!DEST!\AutoNAV.dll"   >nul 2>&1
-copy /Y "%PLUGIN_SOURCE%\AutoNAV.addin" "!DEST!\AutoNAV.addin" >nul 2>&1
-if exist "%PLUGIN_SOURCE%\AutoNAV.pdb" (
-    copy /Y "%PLUGIN_SOURCE%\AutoNAV.pdb" "!DEST!\AutoNAV.pdb" >nul 2>&1
-)
-
-if errorlevel 1 (
-    echo  [!] Navisworks %NW_VERSION% -- copy failed, check permissions
-    goto :eof
-)
-
-REM ---- Track B (optional): RibbonLayout XAML, en-US strings, Images icons ----
-REM Copied only if present in the Plugin source folder. Required by Navisworks only
-REM when the plugin uses CommandHandlerPlugin with a custom ribbon tab.
-set "TRACKB_EXTRA="
-
-if exist "%PLUGIN_SOURCE%\AutoNAV.xaml" (
-    copy /Y "%PLUGIN_SOURCE%\AutoNAV.xaml" "!DEST!\AutoNAV.xaml" >nul 2>&1
-    set "TRACKB_EXTRA=!TRACKB_EXTRA! AutoNAV.xaml"
-)
-
-if exist "%PLUGIN_SOURCE%\en-US" (
-    if not exist "!DEST!\en-US" mkdir "!DEST!\en-US"
-    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\en-US" "!DEST!\en-US" >nul 2>&1
-    set "TRACKB_EXTRA=!TRACKB_EXTRA! en-US\"
-)
-
-if exist "%PLUGIN_SOURCE%\Images" (
-    if not exist "!DEST!\Images" mkdir "!DEST!\Images"
-    xcopy /Y /E /I /Q "%PLUGIN_SOURCE%\Images" "!DEST!\Images" >nul 2>&1
-    set "TRACKB_EXTRA=!TRACKB_EXTRA! Images\"
-)
-
-echo  [+] Navisworks %NW_VERSION% -- installed to !DEST!
-if not "!TRACKB_EXTRA!"=="" echo      + ribbon assets:!TRACKB_EXTRA!
-set /a INSTALLED_COUNT+=1
-if "!INSTALLED_VERSIONS!"=="" (
-    set "INSTALLED_VERSIONS=%NW_VERSION%"
-) else (
-    set "INSTALLED_VERSIONS=!INSTALLED_VERSIONS!, %NW_VERSION%"
-)
-goto :eof
