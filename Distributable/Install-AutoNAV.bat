@@ -1,24 +1,15 @@
 @echo off
 REM ============================================================================
-REM AutoNAV Installer — v3.0.0
-REM Installs to ALL detected versions of Navisworks Manage (2024 / 2025 / 2026 / 2027)
+REM AutoNAV Installer (bundle format) - v3.0.0
+REM Installs AutoNAV.bundle\ into:
+REM   %APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
+REM PackageContents.xml inside the bundle routes Navisworks 2024/25/26/27 to
+REM its matching per-version DLL.
+REM
+REM Per-user install: no admin required.
 REM ============================================================================
 
 setlocal enabledelayedexpansion
-
-REM Require admin
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo.
-    echo ============================================================================
-    echo  ERROR: Administrator privileges required!
-    echo ============================================================================
-    echo.
-    echo  Please right-click this file and select "Run as administrator".
-    echo.
-    pause
-    exit /b 1
-)
 
 set "SCRIPT_DIR=%~dp0"
 set "INSTALL_SCRIPT=%SCRIPT_DIR%Install-AutoNAV.ps1"
@@ -38,12 +29,15 @@ if not exist "!INSTALL_SCRIPT!" (
 cls
 echo.
 echo ============================================================================
-echo                        AutoNAV Plugin Installer
-echo                             Version 3.0.0
+echo                        AutoNAV Plugin Installer (bundle)
+echo                              Version 3.0.0
 echo ============================================================================
 echo.
-echo  This installer will find every copy of Navisworks Manage on this machine
-echo  (2024, 2025, 2026, 2027) and install AutoNAV to each one automatically.
+echo  Installs the AutoNAV.bundle to:
+echo    %%APPDATA%%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
+echo.
+echo  Navisworks Manage 2024, 2025, 2026, and 2027 will all pick it up via
+echo  PackageContents.xml.
 echo.
 echo ============================================================================
 echo.
@@ -57,13 +51,13 @@ if !PS_EXIT! equ 0 (
     echo  Installation complete!
     echo ============================================================================
     echo.
-    echo  Launch any installed version of Navisworks Manage and open the
+    echo  Launch any installed Navisworks Manage version and open the
     echo  Add-Ins ribbon tab to find AutoNAV.
     echo.
     timeout /t 5 /nobreak
 ) else (
     echo ============================================================================
-    echo  Installation encountered errors — see messages above.
+    echo  Installation encountered errors -- see messages above.
     echo ============================================================================
     echo.
     pause

@@ -1,17 +1,16 @@
 // AutoNAV All-in-One Installer (Windows .exe)
 //
 // Single-file Windows installer for the AutoNAV Navisworks Manage plugin.
-// Carries one AutoNAV.dll + AutoNAV.addin pair *per supported Navisworks
-// version* (2024, 2025, 2026, 2027), embedded at compile time.  On launch:
+// Carries the full AutoNAV.bundle directory tree (PackageContents.xml plus
+// Contents/V24..V27/ DLL + .addin pairs) embedded at compile time.  On launch:
 //
-//  1. If not running elevated, self-relaunches via UAC, then exits the
-//     non-elevated instance.
-//  2. Closes Navisworks if it's running so the DLL isn't locked.
-//  3. Detects every installed Navisworks Manage 2024-2027.
-//  4. For each, writes that version's matching AutoNAV.dll + AutoNAV.addin
-//     into C:\ProgramData\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\,
-//     backing up any existing files into Backup_<timestamp>\ first.
-//  5. Prints a summary and pauses so the user can read it.
+//  1. Closes Navisworks if it's running so files aren't locked.
+//  2. Extracts the embedded bundle to
+//     %APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\.
+//     (Per-user; no admin elevation required.)
+//  3. PackageContents.xml inside the bundle is what tells Navisworks 2024-2027
+//     which per-version DLL to load.
+//  4. Prints a summary and pauses so the user can read it.
 //
 // Built with `go build -ldflags "-s -w"` for GOOS=windows GOARCH=amd64.
 package main
@@ -20,6 +19,7 @@ import (
 	"bufio"
 	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,196 +27,161 @@ import (
 	"time"
 )
 
-//go:embed payload/2024/AutoNAV.dll payload/2024/AutoNAV.addin
-//go:embed payload/2025/AutoNAV.dll payload/2025/AutoNAV.addin
-//go:embed payload/2026/AutoNAV.dll payload/2026/AutoNAV.addin
-//go:embed payload/2027/AutoNAV.dll payload/2027/AutoNAV.addin
-var payloads embed.FS
+//go:embed all:payload/AutoNAV.bundle
+var bundle embed.FS
 
-var supportedVersions = []string{"2024", "2025", "2026", "2027"}
-
-const version = "3.1.0"
+const (
+	bundleName    = "AutoNAV.bundle"
+	embedRoot     = "payload/AutoNAV.bundle"
+	version       = "3.2.0"
+	supportedYears = "2024 / 2025 / 2026 / 2027"
+)
 
 func main() {
-	if !isAdmin() {
-		fmt.Println("Requesting administrator privileges...")
-		if err := relaunchAsAdmin(); err != nil {
-			fmt.Println("Failed to elevate:", err)
-			pause()
-			os.Exit(1)
-		}
-		return
-	}
-
 	exitCode := run()
 	pause()
 	os.Exit(exitCode)
-}
-
-// isAdmin returns true when the current process can open \\.\PHYSICALDRIVE0,
-// which on Windows requires administrator privileges.
-func isAdmin() bool {
-	f, err := os.Open(`\\.\PHYSICALDRIVE0`)
-	if err == nil {
-		f.Close()
-		return true
-	}
-	return false
-}
-
-// relaunchAsAdmin re-invokes this executable via PowerShell's
-// `Start-Process -Verb RunAs`, which triggers the standard UAC consent prompt.
-func relaunchAsAdmin() error {
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	psExe := strings.ReplaceAll(exe, "'", "''")
-	return exec.Command(
-		"powershell.exe", "-NoProfile", "-Command",
-		fmt.Sprintf("Start-Process -FilePath '%s' -Verb RunAs", psExe),
-	).Run()
 }
 
 func run() int {
 	banner()
 	closeNavisworks()
 
-	var installed []string
-	var errored []string
+	dest, err := bundleInstallDir()
+	if err != nil {
+		fmt.Println("ERROR:", err)
+		return 1
+	}
 
-	for _, v := range supportedVersions {
-		ok, err := installToVersion(v)
-		if err != nil {
-			fmt.Printf("  [!] Navisworks %s -- ERROR: %v\n", v, err)
-			errored = append(errored, v)
-			continue
+	// Detect which Navisworks installs are present (info-only; we always install
+	// the full bundle so PackageContents.xml can route per-version at runtime).
+	detected := detectNavisworks()
+	if len(detected) == 0 {
+		fmt.Println("  WARNING: No Navisworks Manage 2024-2027 install detected on this machine.")
+		fmt.Println("           The bundle will still be installed, but won't be loaded until")
+		fmt.Println("           a supported Navisworks version is installed.")
+		fmt.Println()
+	} else {
+		fmt.Printf("  Detected Navisworks Manage: %s\n", strings.Join(detected, ", "))
+		fmt.Println()
+	}
+
+	// Back up any existing bundle.
+	if _, err := os.Stat(dest); err == nil {
+		stamp := time.Now().Format("20060102_150405")
+		backup := dest + ".backup_" + stamp
+		fmt.Printf("  Existing bundle found -- backing up to:\n    %s\n", backup)
+		if err := os.Rename(dest, backup); err != nil {
+			fmt.Printf("  WARNING: backup rename failed (%v); will overwrite in place.\n", err)
 		}
-		if ok {
-			installed = append(installed, v)
-		}
+	}
+
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		fmt.Println("ERROR: create destination:", err)
+		return 1
+	}
+
+	fmt.Println("  Writing bundle...")
+	count, bytesWritten, err := extractBundle(dest)
+	if err != nil {
+		fmt.Println("ERROR:", err)
+		return 1
 	}
 
 	fmt.Println()
 	fmt.Println("===============================================================================")
-	if len(installed) > 0 {
-		fmt.Printf(" Installation complete!  Installed to: Navisworks %s\n", strings.Join(installed, ", "))
-		fmt.Println()
-		fmt.Println(" Next steps:")
-		fmt.Println("   1. Launch Navisworks Manage")
-		fmt.Println("   2. Open the Add-Ins ribbon tab")
-		fmt.Println("   3. Click AutoNAV to begin")
-		fmt.Println("===============================================================================")
-		return 0
-	}
-	if len(errored) > 0 {
-		fmt.Println(" Installation finished with errors -- see messages above.")
-		fmt.Println("===============================================================================")
-		return 1
-	}
-	fmt.Println(" ERROR: No compatible Navisworks installation found.")
-	fmt.Println(" Install Navisworks Manage 2024, 2025, 2026, or 2027 and run again.")
+	fmt.Printf(" Installation complete!  Wrote %d files (%d KB) to:\n", count, (bytesWritten+1023)/1024)
+	fmt.Printf("   %s\n", dest)
+	fmt.Println()
+	fmt.Println(" PackageContents.xml will route Navisworks 2024/25/26/27 to its matching DLL.")
+	fmt.Println()
+	fmt.Println(" Next steps:")
+	fmt.Println("   1. Launch Navisworks Manage")
+	fmt.Println("   2. Open the Add-Ins ribbon tab")
+	fmt.Println("   3. Click AutoNAV to begin")
 	fmt.Println("===============================================================================")
-	return 1
+	return 0
 }
 
 func banner() {
 	fmt.Println()
 	fmt.Println("===============================================================================")
 	fmt.Printf("              AutoNAV All-in-One Installer  v%s\n", version)
-	fmt.Println("         Targets: Navisworks Manage 2024 / 2025 / 2026 / 2027")
-	fmt.Println("         (per-version DLL selected automatically)")
+	fmt.Printf("         Targets: Navisworks Manage %s\n", supportedYears)
+	fmt.Println("         Format: %APPDATA%\\Autodesk\\ApplicationPlugins\\AutoNAV.bundle\\")
 	fmt.Println("===============================================================================")
 	fmt.Println()
 }
 
-// navisworksInstallDir returns the first existing Navisworks Manage install
-// directory for the given version, or "" if not installed.
-func navisworksInstallDir(version string) string {
-	for _, p := range []string{
-		`C:\Program Files\Autodesk\Navisworks Manage ` + version,
-		`C:\Program Files (x86)\Autodesk\Navisworks Manage ` + version,
-	} {
-		if info, err := os.Stat(p); err == nil && info.IsDir() {
-			return p
-		}
+// bundleInstallDir resolves the per-user ApplicationPlugins folder and returns
+// the AutoNAV.bundle path inside it.
+func bundleInstallDir() (string, error) {
+	appData := os.Getenv("APPDATA")
+	if appData == "" {
+		return "", fmt.Errorf("%%APPDATA%% environment variable is empty")
 	}
-	return ""
+	return filepath.Join(appData, "Autodesk", "ApplicationPlugins", bundleName), nil
 }
 
-// closeNavisworks force-kills Roamer.exe (the Navisworks process) if it's
-// running, so the plugin DLL isn't locked when we copy over it.
+// detectNavisworks lists Navisworks Manage years present under Program Files.
+func detectNavisworks() []string {
+	var found []string
+	for _, year := range []string{"2024", "2025", "2026", "2027"} {
+		for _, root := range []string{
+			`C:\Program Files\Autodesk\Navisworks Manage `,
+			`C:\Program Files (x86)\Autodesk\Navisworks Manage `,
+		} {
+			if info, err := os.Stat(root + year); err == nil && info.IsDir() {
+				found = append(found, year)
+				break
+			}
+		}
+	}
+	return found
+}
+
+// closeNavisworks force-kills Roamer.exe if running so files aren't locked.
 func closeNavisworks() {
 	out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq Roamer.exe", "/NH").Output()
 	if err != nil || !strings.Contains(strings.ToLower(string(out)), "roamer.exe") {
 		return
 	}
-	fmt.Println("Closing Navisworks...")
+	fmt.Println("  Closing Navisworks...")
 	_ = exec.Command("taskkill", "/F", "/IM", "Roamer.exe").Run()
 	time.Sleep(2 * time.Second)
 }
 
-func installToVersion(version string) (bool, error) {
-	if navisworksInstallDir(version) == "" {
-		fmt.Printf("  [--] Navisworks %s -- not installed, skipped\n", version)
-		return false, nil
-	}
-
-	dll, err := payloads.ReadFile("payload/" + version + "/AutoNAV.dll")
-	if err != nil {
-		return false, fmt.Errorf("read embedded DLL for %s: %w", version, err)
-	}
-	addin, err := payloads.ReadFile("payload/" + version + "/AutoNAV.addin")
-	if err != nil {
-		return false, fmt.Errorf("read embedded addin for %s: %w", version, err)
-	}
-
-	dest := fmt.Sprintf(`C:\ProgramData\Autodesk\Navisworks Manage %s\Plugins\AutoNAV`, version)
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return false, fmt.Errorf("create %s: %w", dest, err)
-	}
-
-	destDll := filepath.Join(dest, "AutoNAV.dll")
-	destAddin := filepath.Join(dest, "AutoNAV.addin")
-
-	// Back up any existing payload before overwriting.
-	if fileExists(destDll) || fileExists(destAddin) {
-		stamp := time.Now().Format("20060102_150405")
-		backup := filepath.Join(dest, "Backup_"+stamp)
-		if err := os.MkdirAll(backup, 0o755); err == nil {
-			if fileExists(destDll) {
-				_ = copyFile(destDll, filepath.Join(backup, "AutoNAV.dll"))
-			}
-			if fileExists(destAddin) {
-				_ = copyFile(destAddin, filepath.Join(backup, "AutoNAV.addin"))
-			}
-			fmt.Printf("      Backup saved to: %s\n", backup)
+// extractBundle walks the embedded FS and writes every file to dest, preserving
+// the relative directory structure.
+func extractBundle(dest string) (filesWritten int, bytesWritten int64, err error) {
+	err = fs.WalkDir(bundle, embedRoot, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-	}
-
-	if err := os.WriteFile(destDll, dll, 0o644); err != nil {
-		return false, fmt.Errorf("write AutoNAV.dll: %w", err)
-	}
-	if err := os.WriteFile(destAddin, addin, 0o644); err != nil {
-		return false, fmt.Errorf("write AutoNAV.addin: %w", err)
-	}
-
-	fmt.Printf("  [+] Navisworks %s -- installed (%d KB) -> %s\n",
-		version, (len(dll)+1023)/1024, dest)
-	return true, nil
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(dst, data, 0o644)
+		rel, relErr := filepath.Rel(embedRoot, p)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		out := filepath.Join(dest, rel)
+		if d.IsDir() {
+			return os.MkdirAll(out, 0o755)
+		}
+		data, readErr := bundle.ReadFile(p)
+		if readErr != nil {
+			return fmt.Errorf("read embedded %s: %w", p, readErr)
+		}
+		if writeErr := os.WriteFile(out, data, 0o644); writeErr != nil {
+			return fmt.Errorf("write %s: %w", out, writeErr)
+		}
+		filesWritten++
+		bytesWritten += int64(len(data))
+		fmt.Printf("    + %s  (%d bytes)\n", rel, len(data))
+		return nil
+	})
+	return
 }
 
 func pause() {

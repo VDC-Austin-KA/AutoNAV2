@@ -3,17 +3,20 @@
 #
 # Builds AutoNAV.dll for every supported Navisworks version installed on this
 # machine (2024, 2025, 2026, 2027), stages each into the matching
-# Installer\payload\<year>\ subfolder, then rebuilds the single-file
-# Distributable\AutoNAV-Installer.exe.
+# Installer\payload\AutoNAV.bundle\Contents\V<yy>\ subfolder, then rebuilds the
+# single-file Distributable\AutoNAV-Installer.exe.
 #
 # Per-version output:
-#   AutoNAV\bin\Release-NW2024\AutoNAV.dll  --> Installer\payload\2024\AutoNAV.dll
-#   AutoNAV\bin\Release-NW2025\AutoNAV.dll  --> Installer\payload\2025\AutoNAV.dll
-#   AutoNAV\bin\Release-NW2026\AutoNAV.dll  --> Installer\payload\2026\AutoNAV.dll
-#   AutoNAV\bin\Release-NW2027\AutoNAV.dll  --> Installer\payload\2027\AutoNAV.dll
+#   AutoNAV\bin\Release-NW2024\AutoNAV.dll  --> Installer\payload\AutoNAV.bundle\Contents\V24\AutoNAV.dll
+#   AutoNAV\bin\Release-NW2025\AutoNAV.dll  --> Installer\payload\AutoNAV.bundle\Contents\V25\AutoNAV.dll
+#   AutoNAV\bin\Release-NW2026\AutoNAV.dll  --> Installer\payload\AutoNAV.bundle\Contents\V26\AutoNAV.dll
+#   AutoNAV\bin\Release-NW2027\AutoNAV.dll  --> Installer\payload\AutoNAV.bundle\Contents\V27\AutoNAV.dll
 #
-# Versions not installed on this machine are skipped (their payload\<year>\
-# folder is left untouched -- a previous build's copy will remain).
+# Final install target on end-user machines:
+#   %APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
+#
+# Versions not installed on this build machine are skipped (their bundle
+# subfolder is left untouched -- a previous build's copy remains).
 #
 # Requirements:
 #   - MSBuild (Visual Studio 2022+ or Build Tools)
@@ -31,19 +34,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$csproj      = Join-Path $RepoRoot 'AutoNAV\AutoNAV.csproj'
+$csproj       = Join-Path $RepoRoot 'AutoNAV\AutoNAV.csproj'
 $installerDir = Join-Path $RepoRoot 'Installer'
-$payloadRoot = Join-Path $installerDir 'payload'
-$distDir     = Join-Path $RepoRoot 'Distributable'
-$addinSrc    = Join-Path $RepoRoot 'AutoNAV\AutoNAV.addin'
+$bundleRoot   = Join-Path $installerDir 'payload\AutoNAV.bundle'
+$contentsRoot = Join-Path $bundleRoot   'Contents'
+$distDir      = Join-Path $RepoRoot 'Distributable'
+$addinSrc     = Join-Path $RepoRoot 'AutoNAV\AutoNAV.addin'
+$pkgContents  = Join-Path $bundleRoot 'PackageContents.xml'
 
-if (-not (Test-Path -LiteralPath $csproj))      { throw "Missing project: $csproj" }
-if (-not (Test-Path -LiteralPath $addinSrc))    { throw "Missing addin manifest: $addinSrc" }
-if (-not (Test-Path -LiteralPath $MSBuildExe))  { throw "MSBuild not found at: $MSBuildExe -- pass -MSBuildExe with the correct path." }
+if (-not (Test-Path -LiteralPath $csproj))       { throw "Missing project: $csproj" }
+if (-not (Test-Path -LiteralPath $addinSrc))     { throw "Missing addin manifest: $addinSrc" }
+if (-not (Test-Path -LiteralPath $pkgContents))  { throw "Missing PackageContents.xml: $pkgContents" }
+if (-not (Test-Path -LiteralPath $MSBuildExe))   { throw "MSBuild not found at: $MSBuildExe -- pass -MSBuildExe with the correct path." }
+
+# Map year (4-digit) -> bundle subfolder (V24/V25/...)
+function Get-BundleSubdir([string]$year) { 'V' + $year.Substring(2) }
 
 Write-Host ""
 Write-Host "===============================================================================" -ForegroundColor Cyan
-Write-Host "  AutoNAV multi-version build" -ForegroundColor Cyan
+Write-Host "  AutoNAV multi-version build (bundle format)" -ForegroundColor Cyan
 Write-Host "===============================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -76,25 +85,34 @@ foreach ($v in $Versions) {
         throw "Build succeeded but DLL not at expected path: $builtDll"
     }
 
-    $payloadVerDir = Join-Path $payloadRoot $v
-    New-Item -ItemType Directory -Path $payloadVerDir -Force | Out-Null
-    Copy-Item $builtDll  (Join-Path $payloadVerDir 'AutoNAV.dll')   -Force
-    Copy-Item $addinSrc  (Join-Path $payloadVerDir 'AutoNAV.addin') -Force
-
-    # Mirror into Distributable\AutoNAV_v3.0.0\Plugin\<year>\ for the classic
-    # multi-file distribution path (in addition to the embedded .exe).
-    $classicDir = Join-Path $distDir ("AutoNAV_v3.0.0\Plugin\$v")
-    New-Item -ItemType Directory -Path $classicDir -Force | Out-Null
-    Copy-Item $builtDll  (Join-Path $classicDir 'AutoNAV.dll')   -Force
-    Copy-Item $addinSrc  (Join-Path $classicDir 'AutoNAV.addin') -Force
+    $sub = Get-BundleSubdir $v
+    $bundleVerDir = Join-Path $contentsRoot $sub
+    New-Item -ItemType Directory -Path $bundleVerDir -Force | Out-Null
+    Copy-Item $builtDll  (Join-Path $bundleVerDir 'AutoNAV.dll')   -Force
+    Copy-Item $addinSrc  (Join-Path $bundleVerDir 'AutoNAV.addin') -Force
     if (Test-Path -LiteralPath $builtPdb) {
-        Copy-Item $builtPdb (Join-Path $classicDir 'AutoNAV.pdb') -Force
+        Copy-Item $builtPdb (Join-Path $bundleVerDir 'AutoNAV.pdb') -Force
     }
 
-    Write-Host ("       ->  {0}" -f $payloadVerDir) -ForegroundColor Green
-    Write-Host ("       ->  {0}" -f $classicDir)    -ForegroundColor Green
+    # Mirror the same bundle into the classic distribution path so the .bat /
+    # .ps1 installers ship the exact same tree.
+    $classicBundle = Join-Path $distDir ('AutoNAV_v3.0.0\AutoNAV.bundle\Contents\' + $sub)
+    New-Item -ItemType Directory -Path $classicBundle -Force | Out-Null
+    Copy-Item $builtDll  (Join-Path $classicBundle 'AutoNAV.dll')   -Force
+    Copy-Item $addinSrc  (Join-Path $classicBundle 'AutoNAV.addin') -Force
+    if (Test-Path -LiteralPath $builtPdb) {
+        Copy-Item $builtPdb (Join-Path $classicBundle 'AutoNAV.pdb') -Force
+    }
+
+    Write-Host ("       ->  {0}" -f $bundleVerDir)  -ForegroundColor Green
+    Write-Host ("       ->  {0}" -f $classicBundle) -ForegroundColor Green
     $built += $v
 }
+
+# Sync PackageContents.xml into both bundle roots.
+$classicBundleRoot = Join-Path $distDir 'AutoNAV_v3.0.0\AutoNAV.bundle'
+New-Item -ItemType Directory -Path $classicBundleRoot -Force | Out-Null
+Copy-Item $pkgContents (Join-Path $classicBundleRoot 'PackageContents.xml') -Force
 
 Write-Host ""
 Write-Host ("  Built:   {0}" -f ($(if ($built.Count)   { $built   -join ', ' } else { '(none)' }))) -ForegroundColor Green

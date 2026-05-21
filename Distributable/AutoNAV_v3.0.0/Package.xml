@@ -17,12 +17,18 @@
     <Version Name="Navisworks Manage 2024" />
   </SupportedVersions>
 
-  <InstallPath>C:\ProgramData\Autodesk\Navisworks Manage {Version}\Plugins\AutoNAV\</InstallPath>
+  <InstallPath>%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\</InstallPath>
 
   <Contents>
-    <File Name="AutoNAV.dll" Description="Plugin Assembly" Required="true" />
-    <File Name="AutoNAV.addin" Description="Plugin Manifest (must be in same folder as AutoNAV.dll)" Required="true" />
-    <File Name="AutoNAV.pdb" Description="Debug Symbols" Required="false" />
+    <File Name="AutoNAV.bundle\PackageContents.xml" Description="Bundle manifest -- routes Navisworks 2024/25/26/27 to per-version DLL" Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V24\AutoNAV.dll"   Description="Plugin Assembly (Navisworks 2024)" Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V24\AutoNAV.addin" Description="Addin manifest (Navisworks 2024)"  Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V25\AutoNAV.dll"   Description="Plugin Assembly (Navisworks 2025)" Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V25\AutoNAV.addin" Description="Addin manifest (Navisworks 2025)"  Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V26\AutoNAV.dll"   Description="Plugin Assembly (Navisworks 2026)" Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V26\AutoNAV.addin" Description="Addin manifest (Navisworks 2026)"  Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V27\AutoNAV.dll"   Description="Plugin Assembly (Navisworks 2027)" Required="true" />
+    <File Name="AutoNAV.bundle\Contents\V27\AutoNAV.addin" Description="Addin manifest (Navisworks 2027)"  Required="true" />
   </Contents>
 
   <Features>
@@ -43,7 +49,7 @@
 
   <Installation>
     <Type>Plugin</Type>
-    <InstallationFolder>C:\ProgramData\Autodesk\Navisworks Manage {Version}\Plugins\AutoNAV\</InstallationFolder>
+    <InstallationFolder>%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\</InstallationFolder>
     <AdminRequired>true</AdminRequired>
     <RestartRequired>true</RestartRequired>
     <Note>Both AutoNAV.dll and AutoNAV.addin must be in the same AutoNAV\ subfolder</Note>

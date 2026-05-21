@@ -1,31 +1,32 @@
 ################################################################################
-# AutoNAV Installer Script
+# AutoNAV Installer Script (bundle format)
 # Version: 3.0.0
-# Installs AutoNAV to all detected Navisworks Manage versions (2024-2027)
-# Plugin path: C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
+# Installs the AutoNAV.bundle into the Autodesk ApplicationPlugins folder so
+# Navisworks Manage 2024 / 2025 / 2026 / 2027 all pick it up.
 # Author: Keith Acker
 #
-# File layout copied to each Navisworks version's Plugins\AutoNAV\ folder:
-#   Track A (AddInPlugin - required):
-#     - AutoNAV.dll
-#     - AutoNAV.addin
-#     - AutoNAV.pdb        (optional, debug symbols)
-#   Track B (CommandHandlerPlugin - copied only if present in source folder):
-#     - AutoNAV.xaml       (RibbonLayout XAML, if using a custom ribbon tab)
-#     - en-US\             (localized XAML + .name resource file)
-#     - Images\            (PNG icons referenced by the XAML)
-# See NAVISWORKS_PLUGIN_REQUIREMENTS.md at the repo root for the full reference.
+# Final layout on the user's machine:
+#   %APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
+#     PackageContents.xml
+#     Contents\
+#       V24\AutoNAV.dll + AutoNAV.addin     (Navisworks 2024)
+#       V25\AutoNAV.dll + AutoNAV.addin     (Navisworks 2025)
+#       V26\AutoNAV.dll + AutoNAV.addin     (Navisworks 2026)
+#       V27\AutoNAV.dll + AutoNAV.addin     (Navisworks 2027)
+#
+# Per-user (%APPDATA%) install is the default and requires no admin.
+# Pass -AllUsers to install machine-wide under %PROGRAMDATA%\Autodesk\ApplicationPlugins\
+# (which DOES require admin).
 ################################################################################
 
 param(
     [switch]$Silent,
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$AllUsers
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
-$SupportedVersions = @("2024", "2025", "2026", "2027")
 
 $Colors = @{
     Success = 'Green'
@@ -48,252 +49,83 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Returns the Navisworks install directory if found, otherwise null
-function Get-NavisworksInstallDir {
-    param([string]$Version)
-    $candidates = @(
-        "C:\Program Files\Autodesk\Navisworks Manage $Version",
-        "C:\Program Files (x86)\Autodesk\Navisworks Manage $Version"
-    )
-    foreach ($p in $candidates) {
-        if (Test-Path $p) { return $p }
+function Get-DestRoot {
+    param([switch]$AllUsers)
+    if ($AllUsers) { return Join-Path $env:PROGRAMDATA 'Autodesk\ApplicationPlugins' }
+    return Join-Path $env:APPDATA 'Autodesk\ApplicationPlugins'
+}
+
+function Find-BundleSource {
+    param([string]$ScriptDir)
+    # Source candidates next to this script:
+    #   1. <ScriptDir>\AutoNAV.bundle\PackageContents.xml          (script colocated with bundle)
+    #   2. <ScriptDir>\AutoNAV_v3.0.0\AutoNAV.bundle\PackageContents.xml
+    foreach ($d in @(
+        (Join-Path $ScriptDir 'AutoNAV.bundle'),
+        (Join-Path $ScriptDir 'AutoNAV_v3.0.0\AutoNAV.bundle')
+    )) {
+        if (Test-Path (Join-Path $d 'PackageContents.xml')) { return $d }
     }
     return $null
 }
 
-# Returns the per-machine plugin folder (AutoNAV subfolder inside Plugins)
-function Get-PluginInstallPath {
-    param([string]$Version)
-    return "C:\ProgramData\Autodesk\Navisworks Manage $Version\Plugins\AutoNAV"
-}
+function Install-Bundle {
+    Write-ColorOutput "`n=========================================" -Type Info
+    Write-ColorOutput "  AutoNAV Installation  (bundle format)   " -Type Info
+    Write-ColorOutput "  Navisworks 2024 / 2025 / 2026 / 2027    " -Type Info
+    Write-ColorOutput "=========================================`n" -Type Info
 
-function Resolve-PerVersionSource {
-    param(
-        [string]$Version,
-        [string]$ScriptDir
-    )
-    # Preference order:
-    #   1. <ScriptDir>\<year>\AutoNAV.dll                          (per-version next to installer)
-    #   2. <ScriptDir>\AutoNAV_v3.0.0\Plugin\<year>\AutoNAV.dll    (per-version classic layout)
-    #   3. <ScriptDir>\AutoNAV.dll                                 (legacy single-version)
-    #   4. <ScriptDir>\AutoNAV_v3.0.0\Plugin\AutoNAV.dll           (legacy classic layout)
-    $candidates = @(
-        (Join-Path $ScriptDir $Version),
-        (Join-Path $ScriptDir ("AutoNAV_v3.0.0\Plugin\" + $Version)),
-        $ScriptDir,
-        (Join-Path $ScriptDir "AutoNAV_v3.0.0\Plugin")
-    )
-    foreach ($dir in $candidates) {
-        $dll   = Join-Path $dir "AutoNAV.dll"
-        $addin = Join-Path $dir "AutoNAV.addin"
-        if ((Test-Path $dll) -and (Test-Path $addin)) {
-            return [pscustomobject]@{
-                Dir   = $dir
-                Dll   = $dll
-                Addin = $addin
-                Pdb   = (Join-Path $dir "AutoNAV.pdb")
-            }
-        }
-    }
-    return $null
-}
-
-function Install-ToVersion {
-    param(
-        [string]$Version,
-        [string]$ScriptDir
-    )
-
-    $installDir = Get-NavisworksInstallDir -Version $Version
-    if (-not $installDir) { return $false }
-
-    $src = Resolve-PerVersionSource -Version $Version -ScriptDir $ScriptDir
-    if (-not $src) {
-        Write-ColorOutput ("  [!] Navisworks " + $Version + " -- no source DLL found in " + $Version + "\, AutoNAV_v3.0.0\Plugin\" + $Version + "\, or script root") -Type Error
-        return $false
-    }
-    $SourceDir = $src.Dir
-    $DllFile   = $src.Dll
-    $AddinFile = $src.Addin
-    $PdbFile   = $src.Pdb
-
-    Write-ColorOutput ("  Installing to Navisworks Manage " + $Version + "...") -Type Info
-
-    $pluginPath = Get-PluginInstallPath -Version $Version
-
-    if (-not (Test-Path $pluginPath)) {
-        New-Item -ItemType Directory -Path $pluginPath -Force | Out-Null
-    }
-
-    $dllTarget   = Join-Path $pluginPath "AutoNAV.dll"
-    $addinTarget = Join-Path $pluginPath "AutoNAV.addin"
-    $pdbTarget   = Join-Path $pluginPath "AutoNAV.pdb"
-
-    # Back up existing payload (DLL / .addin / Track-B subfolders) before overwriting
-    if ((Test-Path $dllTarget) -or (Test-Path $addinTarget)) {
-        $backupPath = Join-Path $pluginPath ("Backup_" + (Get-Date -Format 'yyyyMMdd_HHmmss'))
-        New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
-        if (Test-Path $dllTarget)   { Copy-Item $dllTarget   $backupPath -Force }
-        if (Test-Path $addinTarget) { Copy-Item $addinTarget $backupPath -Force }
-        foreach ($sub in @("en-US", "Images")) {
-            $existing = Join-Path $pluginPath $sub
-            if (Test-Path $existing) {
-                Copy-Item $existing $backupPath -Recurse -Force
-            }
-        }
-        Write-ColorOutput ("    Backup saved to: " + $backupPath) -Type Warning
-    }
-
-    # Track A (required): DLL + .addin
-    Copy-Item $DllFile   $dllTarget   -Force
-    Copy-Item $AddinFile $addinTarget -Force
-    if ($PdbFile -and (Test-Path $PdbFile)) { Copy-Item $PdbFile $pdbTarget -Force }
-
-    # Track B (CommandHandlerPlugin) assets: copy only if present in source.
-    # See NAVISWORKS_PLUGIN_REQUIREMENTS.md section 4 for the required layout.
-    $trackBCopied = @()
-
-    # Ribbon layout XAML (sits next to the DLL)
-    $xamlSource = Join-Path $SourceDir "AutoNAV.xaml"
-    if (Test-Path $xamlSource) {
-        Copy-Item $xamlSource (Join-Path $pluginPath "AutoNAV.xaml") -Force
-        $trackBCopied += "AutoNAV.xaml"
-    }
-
-    # Localized XAML + .name strings (en-US folder is the default Navisworks locale)
-    $enUSSource = Join-Path $SourceDir "en-US"
-    if (Test-Path $enUSSource) {
-        $enUSTarget = Join-Path $pluginPath "en-US"
-        if (Test-Path $enUSTarget) { Remove-Item $enUSTarget -Recurse -Force }
-        Copy-Item $enUSSource $enUSTarget -Recurse -Force
-        $trackBCopied += "en-US\"
-    }
-
-    # Button icons (referenced by relative paths in the XAML)
-    $imagesSource = Join-Path $SourceDir "Images"
-    if (Test-Path $imagesSource) {
-        $imagesTarget = Join-Path $pluginPath "Images"
-        if (Test-Path $imagesTarget) { Remove-Item $imagesTarget -Recurse -Force }
-        Copy-Item $imagesSource $imagesTarget -Recurse -Force
-        $trackBCopied += "Images\"
-    }
-
-    $size = [math]::Round((Get-Item $dllTarget).Length / 1KB, 1)
-    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- installed (" + $size + " KB) -> " + $pluginPath) -Type Success
-    if ($trackBCopied.Count -gt 0) {
-        Write-ColorOutput ("      + ribbon assets: " + ($trackBCopied -join ', ')) -Type Success
-    }
-    return $true
-}
-
-function Uninstall-FromVersion {
-    param([string]$Version)
-
-    $pluginPath = Get-PluginInstallPath -Version $Version
-    $dllTarget   = Join-Path $pluginPath "AutoNAV.dll"
-    $addinTarget = Join-Path $pluginPath "AutoNAV.addin"
-    $pdbTarget   = Join-Path $pluginPath "AutoNAV.pdb"
-    $xamlTarget  = Join-Path $pluginPath "AutoNAV.xaml"
-    $enUSTarget  = Join-Path $pluginPath "en-US"
-    $imagesTarget = Join-Path $pluginPath "Images"
-
-    # Also check old AddIns location so upgrades from older installs are cleaned up
-    $oldAddInsPath = "C:\Program Files\Autodesk\Navisworks Manage $Version\AddIns"
-    $oldDll        = Join-Path $oldAddInsPath "AutoNAV.dll"
-    $oldAddin      = Join-Path $oldAddInsPath "AutoNAV.addin"
-    $oldPdb        = Join-Path $oldAddInsPath "AutoNAV.pdb"
-
-    $found = (Test-Path $dllTarget) -or (Test-Path $addinTarget) -or
-             (Test-Path $xamlTarget) -or (Test-Path $enUSTarget) -or (Test-Path $imagesTarget) -or
-             (Test-Path $oldDll) -or (Test-Path $oldAddin)
-    if (-not $found) { return $false }
-
-    # Track A files
-    if (Test-Path $dllTarget)   { Remove-Item $dllTarget   -Force }
-    if (Test-Path $addinTarget) { Remove-Item $addinTarget -Force }
-    if (Test-Path $pdbTarget)   { Remove-Item $pdbTarget   -Force }
-
-    # Track B (CommandHandlerPlugin) assets, if previously installed
-    if (Test-Path $xamlTarget)   { Remove-Item $xamlTarget   -Force }
-    if (Test-Path $enUSTarget)   { Remove-Item $enUSTarget   -Recurse -Force }
-    if (Test-Path $imagesTarget) { Remove-Item $imagesTarget -Recurse -Force }
-
-    # Legacy AddIns location from earlier AutoNAV releases
-    if (Test-Path $oldDll)   { Remove-Item $oldDll   -Force }
-    if (Test-Path $oldAddin) { Remove-Item $oldAddin -Force }
-    if (Test-Path $oldPdb)   { Remove-Item $oldPdb   -Force }
-
-    Write-ColorOutput ("  [+] Navisworks " + $Version + " -- removed") -Type Success
-    return $true
-}
-
-function Install-AutoNAV {
-    Write-ColorOutput "`n========================================" -Type Info
-    Write-ColorOutput "  AutoNAV Installation  --  v3.0.0" -Type Info
-    Write-ColorOutput "  Supports: Navisworks 2024 / 2025 / 2026 / 2027" -Type Info
-    Write-ColorOutput "========================================`n" -Type Info
-
-    if (-not (Test-Administrator)) {
-        Write-ColorOutput "ERROR: Must be run as Administrator." -Type Error
-        Write-ColorOutput "Right-click the .bat file and choose 'Run as administrator'." -Type Warning
+    if ($AllUsers -and -not (Test-Administrator)) {
+        Write-ColorOutput "ERROR: -AllUsers requires running as Administrator." -Type Error
         exit 1
     }
 
     $scriptPath = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
-
-    # Verify at least one source location is populated.
-    $anySource = $false
-    foreach ($v in $SupportedVersions) {
-        if (Resolve-PerVersionSource -Version $v -ScriptDir $scriptPath) { $anySource = $true; break }
-    }
-    if (-not $anySource) {
-        Write-ColorOutput "ERROR: No plugin payload found." -Type Error
-        Write-ColorOutput "Expected one of these layouts next to this script:" -Type Warning
-        Write-ColorOutput "  .\<year>\AutoNAV.dll + AutoNAV.addin                  (per-version)" -Type Warning
-        Write-ColorOutput "  .\AutoNAV_v3.0.0\Plugin\<year>\AutoNAV.dll + .addin   (per-version, classic)" -Type Warning
-        Write-ColorOutput "  .\AutoNAV.dll + AutoNAV.addin                         (legacy single-version)" -Type Warning
+    $bundleSrc = Find-BundleSource -ScriptDir $scriptPath
+    if (-not $bundleSrc) {
+        Write-ColorOutput "ERROR: Could not find AutoNAV.bundle next to this script." -Type Error
+        Write-ColorOutput "Expected one of:" -Type Warning
+        Write-ColorOutput "  .\AutoNAV.bundle\PackageContents.xml" -Type Warning
+        Write-ColorOutput "  .\AutoNAV_v3.0.0\AutoNAV.bundle\PackageContents.xml" -Type Warning
         exit 1
     }
-    Write-ColorOutput "[+] Installer files found`n" -Type Success
+    Write-ColorOutput ("[+] Source bundle: " + $bundleSrc) -Type Success
 
-    $nwProc = Get-Process -Name "*Navisworks*" -ErrorAction SilentlyContinue
+    # Close Navisworks if running so DLLs aren't locked
+    $nwProc = Get-Process -Name 'Roamer' -ErrorAction SilentlyContinue
     if ($nwProc) {
         Write-ColorOutput "Closing Navisworks..." -Type Warning
         try {
             $nwProc | Stop-Process -Force -ErrorAction Stop
             Start-Sleep -Seconds 2
-            Write-ColorOutput "[+] Navisworks closed`n" -Type Success
         } catch {
-            Write-ColorOutput "WARNING: Could not close Navisworks. Please close it manually and retry." -Type Warning
+            Write-ColorOutput "WARNING: Could not close Navisworks. Close it manually and retry." -Type Warning
             exit 1
         }
     }
 
-    $installed = @()
-    $skipped   = @()
+    $destRoot   = Get-DestRoot -AllUsers:$AllUsers
+    $destBundle = Join-Path $destRoot 'AutoNAV.bundle'
 
-    foreach ($ver in $SupportedVersions) {
-        try {
-            $ok = Install-ToVersion -Version $ver -ScriptDir $scriptPath
-            if ($ok) { $installed += $ver } else { $skipped += $ver }
-        } catch {
-            Write-ColorOutput ("  [!] Navisworks " + $ver + " -- error: " + $_) -Type Error
-        }
+    if (-not (Test-Path $destRoot)) {
+        New-Item -ItemType Directory -Path $destRoot -Force | Out-Null
     }
+
+    if (Test-Path $destBundle) {
+        $stamp  = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $backup = $destBundle + '.backup_' + $stamp
+        Write-ColorOutput ("Backing up existing bundle -> " + $backup) -Type Warning
+        Move-Item -Path $destBundle -Destination $backup -Force
+    }
+
+    Write-ColorOutput ("Copying bundle to " + $destBundle) -Type Info
+    Copy-Item -Path $bundleSrc -Destination $destBundle -Recurse -Force
 
     Write-ColorOutput "`n========================================" -Type Info
-    if ($installed.Count -gt 0) {
-        Write-ColorOutput ("Installed to: Navisworks " + ($installed -join ', ')) -Type Success
-    }
-    if ($skipped.Count -gt 0) {
-        Write-ColorOutput ("Not found (skipped): " + ($skipped -join ', ')) -Type Warning
-    }
+    Write-ColorOutput ("Bundle installed at: " + $destBundle) -Type Success
 
-    if ($installed.Count -eq 0) {
-        Write-ColorOutput "`nERROR: No compatible Navisworks installation found." -Type Error
-        Write-ColorOutput "Install Navisworks Manage 2024, 2025, 2026, or 2027 and try again." -Type Warning
-        exit 1
-    }
+    $count = (Get-ChildItem -Path $destBundle -Recurse -File).Count
+    Write-ColorOutput ("Files written: " + $count) -Type Success
 
     Write-ColorOutput "`nNext steps:" -Type Info
     Write-ColorOutput "  1. Launch Navisworks Manage" -Type Info
@@ -302,42 +134,57 @@ function Install-AutoNAV {
     Write-ColorOutput "========================================`n" -Type Info
 }
 
-function Uninstall-AutoNAV {
-    Write-ColorOutput "`n========================================" -Type Info
+function Uninstall-Bundle {
+    Write-ColorOutput "`n=========================================" -Type Info
     Write-ColorOutput "  AutoNAV Uninstallation" -Type Info
-    Write-ColorOutput "========================================`n" -Type Info
+    Write-ColorOutput "=========================================`n" -Type Info
 
-    if (-not (Test-Administrator)) {
-        Write-ColorOutput "ERROR: Must be run as Administrator." -Type Error
-        exit 1
-    }
-
-    $nwProc = Get-Process -Name "*Navisworks*" -ErrorAction SilentlyContinue
+    $nwProc = Get-Process -Name 'Roamer' -ErrorAction SilentlyContinue
     if ($nwProc) {
         $nwProc | Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
     }
 
-    $removed = @()
-    foreach ($ver in $SupportedVersions) {
-        try {
-            $ok = Uninstall-FromVersion -Version $ver
-            if ($ok) { $removed += $ver }
-        } catch {
-            Write-ColorOutput ("  [!] Navisworks " + $ver + " -- error: " + $_) -Type Error
+    $removed = 0
+    foreach ($root in @(
+        (Join-Path $env:APPDATA     'Autodesk\ApplicationPlugins\AutoNAV.bundle'),
+        (Join-Path $env:PROGRAMDATA 'Autodesk\ApplicationPlugins\AutoNAV.bundle')
+    )) {
+        if (Test-Path $root) {
+            try {
+                Remove-Item -Path $root -Recurse -Force
+                Write-ColorOutput ("  [+] Removed " + $root) -Type Success
+                $removed++
+            } catch {
+                Write-ColorOutput ("  [!] Could not remove " + $root + " -- " + $_) -Type Error
+            }
         }
     }
 
-    if ($removed.Count -gt 0) {
-        Write-ColorOutput ("`n[+] Removed from: Navisworks " + ($removed -join ', ')) -Type Success
+    # Legacy per-version Plugins\AutoNAV\ from older releases
+    foreach ($v in @('2024','2025','2026','2027')) {
+        $legacy = "C:\ProgramData\Autodesk\Navisworks Manage $v\Plugins\AutoNAV"
+        if (Test-Path $legacy) {
+            try {
+                Remove-Item -Path $legacy -Recurse -Force
+                Write-ColorOutput ("  [+] Removed legacy " + $legacy) -Type Success
+                $removed++
+            } catch {
+                Write-ColorOutput ("  [!] Could not remove " + $legacy + " -- " + $_) -Type Warning
+            }
+        }
+    }
+
+    if ($removed -eq 0) {
+        Write-ColorOutput "`nAutoNAV was not found in any install location." -Type Warning
     } else {
-        Write-ColorOutput "`nAutoNAV was not found in any Navisworks installation." -Type Warning
+        Write-ColorOutput ("`nUninstall complete: " + $removed + " location(s) cleaned up.") -Type Success
     }
     Write-ColorOutput "========================================`n" -Type Info
 }
 
 try {
-    if ($Uninstall) { Uninstall-AutoNAV } else { Install-AutoNAV }
+    if ($Uninstall) { Uninstall-Bundle } else { Install-Bundle }
 } catch {
     Write-ColorOutput ("ERROR: " + $_) -Type Error
     exit 1

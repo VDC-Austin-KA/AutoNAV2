@@ -1,20 +1,45 @@
-# AutoNAV multi-version build layout
+# AutoNAV multi-version bundle layout
 
-This document explains how the repo produces a *properly-versioned* AutoNAV
-plugin for Navisworks Manage 2024 / 2025 / 2026 / 2027 and packages them all
-into one Windows installer .exe.
+The plugin is distributed as an Autodesk **ApplicationPlugins bundle**, which is
+the standard format for shipping one .NET assembly per supported Navisworks
+release inside a single discoverable package.
 
-## Why per-version DLLs
+## End-user install path
 
-Each Navisworks Manage release ships its own `Autodesk.Navisworks.Api.dll`
-(plus `Autodesk.Navisworks.Clash.dll`, etc.) with a different assembly
-version. A plugin built referencing the 2024 API can fail to load in 2027
-when the assembly version on disk doesn't match what the DLL was bound
-against. The fix is straightforward: compile the plugin separately against
-each Navisworks year's API DLLs, then ship the matching DLL to the matching
-Navisworks install.
+```
+%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\
+  PackageContents.xml              <-- declares which version loads which DLL
+  Contents\
+    V24\AutoNAV.dll                <-- compiled against Navisworks 2024 API
+    V24\AutoNAV.addin
+    V25\AutoNAV.dll                <-- compiled against Navisworks 2025 API
+    V25\AutoNAV.addin
+    V26\AutoNAV.dll                <-- compiled against Navisworks 2026 API
+    V26\AutoNAV.addin
+    V27\AutoNAV.dll                <-- compiled against Navisworks 2027 API
+    V27\AutoNAV.addin
+```
 
-## Source: `AutoNAV.csproj` configurations
+`%APPDATA%` resolves to `C:\Users\<username>\AppData\Roaming`, so the full
+path is per-user. **No admin / UAC elevation is required.**
+
+For an all-users install (machine-wide), the installer can drop the bundle into
+`%PROGRAMDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\` instead — that
+location does require admin. The PowerShell installer exposes `-AllUsers` for
+this.
+
+## How Navisworks finds it
+
+At startup, Navisworks Manage 2024–2027 scans both ApplicationPlugins
+directories. For each `*.bundle` folder it reads the `PackageContents.xml`,
+matches each `<Components>` block against the running version via
+`RuntimeRequirements/SeriesMin/SeriesMax`, and loads the DLL named in
+`<ComponentEntry ModuleName="...">`. The matching version's `.addin` sits
+beside the DLL and is loaded by the standard add-in mechanism.
+
+## Source
+
+### `AutoNAV/AutoNAV.csproj` — per-version build configurations
 
 ```
 msbuild AutoNAV\AutoNAV.csproj /p:Configuration=Release-NW2024 /p:Platform=x64
@@ -26,78 +51,61 @@ msbuild AutoNAV\AutoNAV.csproj /p:Configuration=Release-NW2027 /p:Platform=x64
 Each configuration pins `$(NWPath)` to the matching `C:\Program Files\Autodesk\Navisworks Manage <year>\`
 and outputs to `AutoNAV\bin\Release-NW<year>\AutoNAV.dll`.
 
-The pre-existing `Release|x64` config is preserved for the developer
-auto-detect / single-build workflow described in `CLAUDE.md`.
+### `Installer/payload/AutoNAV.bundle/` — embedded bundle source tree
 
-## Staging: per-version subfolders
+`PackageContents.xml` lives at the bundle root. The four per-version DLLs land
+in `Contents/V24..V27/`. The Go installer in `Installer/main.go` uses
+`//go:embed all:payload/AutoNAV.bundle` to pack the entire tree into the .exe;
+at install time it walks the embedded FS and reproduces it under
+`%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle\`.
 
-The build outputs are staged into two locations:
-
-```
-Installer/payload/
-  2024/AutoNAV.dll      <-- embedded in AutoNAV-Installer.exe
-  2024/AutoNAV.addin
-  2025/AutoNAV.dll
-  2025/AutoNAV.addin
-  2026/AutoNAV.dll
-  2026/AutoNAV.addin
-  2027/AutoNAV.dll
-  2027/AutoNAV.addin
-
-Distributable/AutoNAV_v3.0.0/Plugin/
-  2024/AutoNAV.dll      <-- read by Install_AutoNAV.bat (classic distribution)
-  2024/AutoNAV.addin
-  2024/AutoNAV.pdb
-  2025/...
-  2026/...
-  2027/...
-```
-
-The `AutoNAV.addin` is byte-identical across years because it references the
-DLL by relative path (`<AssemblyFile>AutoNAV.dll</AssemblyFile>`).
-
-## Packaging: `AutoNAV-Installer.exe`
-
-The Go program in `Installer/main.go` uses `//go:embed` to bake all four
-DLL/addin pairs into a single Windows .exe. At install time it:
-
-1. Self-elevates via UAC.
-2. Closes Navisworks if running.
-3. For each Navisworks year detected under `C:\Program Files\Autodesk\`,
-   writes `payload/<year>/AutoNAV.dll` + `AutoNAV.addin` into
-   `C:\ProgramData\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\`.
-4. Skips versions not installed.
-
-## One-command full build (Windows)
+## Single-command Windows build
 
 ```powershell
 .\Distributable\Build-MultiVersion.ps1
 ```
 
-This invokes MSBuild for every Navisworks year installed on the build box,
-stages each into both locations above, then runs `go build` to produce
+This runs MSBuild for every Navisworks year installed on the build box,
+stages each DLL into `Installer\payload\AutoNAV.bundle\Contents\V##\`,
+mirrors the same tree into `Distributable\AutoNAV_v3.0.0\AutoNAV.bundle\`
+for the classic distribution path, then `go build`s the final
 `Distributable\AutoNAV-Installer.exe`.
 
 Requirements on the build machine:
 - MSBuild (Visual Studio 2022+ or Build Tools)
 - Go 1.21+ on PATH
 - At least one Navisworks Manage 2024–2027 installed (you can only build
-  DLLs against versions you have installed)
+  DLLs against versions you have the SDK / API DLLs for)
 
-## Quick single-DLL build (when you only have one Navisworks installed)
+## Quick single-DLL build (when you only have one Navisworks)
 
 ```powershell
 .\Distributable\Build-Installer-EXE.ps1
 ```
 
-This replicates a single `Distributable\AutoNAV.dll` into all four
-`payload\<year>\` subfolders before linking. Useful for smoke-testing the
-installer flow without a full multi-Navisworks build environment.
+This replicates `Distributable\AutoNAV.dll` into all four `Contents\V##\`
+subfolders before linking. Useful for smoke-testing the installer flow
+without a full multi-Navisworks build environment. The resulting installer
+still uses the bundle layout and PackageContents.xml — it just ships the
+same DLL for every version.
 
 ## Distribution options
 
-| Output                                     | Best for                                                              |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| `Distributable\AutoNAV-Installer.exe`      | Hand-off to coworkers: one double-click, self-elevates, one file.     |
-| `Distributable\AutoNAV-Installer.cmd`      | Same as above but pure-Windows (no Go); single DLL only.              |
-| `Distributable\AutoNAV_v3.0.0\` folder     | IT-admin / scripted deploys; explicit per-version DLLs under `Plugin\<year>\`. |
+| Output                                     | Best for                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| `Distributable\AutoNAV-Installer.exe`      | One-file hand-off to coworkers. Double-click, drops bundle into %APPDATA%. |
+| `Distributable\AutoNAV-Installer.cmd`      | Same payload, pure-Windows .cmd (no Go); useful when Go unavailable.       |
+| `Distributable\AutoNAV_v3.0.0\` folder     | IT-admin / scripted deploys. Run `Install_AutoNAV.bat` from inside.        |
+
+## Uninstall
+
+```powershell
+# Per-user:
+Remove-Item "$env:APPDATA\Autodesk\ApplicationPlugins\AutoNAV.bundle" -Recurse -Force
+
+# Or run:
+.\Distributable\Install-AutoNAV.ps1 -Uninstall
+```
+
+The PowerShell uninstaller also cleans up any legacy installs from earlier
+versions that wrote to `C:\ProgramData\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\`.
