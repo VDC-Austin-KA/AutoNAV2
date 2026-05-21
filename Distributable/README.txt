@@ -5,20 +5,29 @@
 
 QUICK START FOR COWORKERS - ONE FILE, JUST DOUBLE-CLICK:
 
-   AutoNAV-Installer.cmd
+   AutoNAV-Installer.exe   (recommended - polished single .exe)
+       or
+   AutoNAV-Installer.cmd   (same thing, smaller, no .exe extension)
 
-Hand THIS ONE FILE to any coworker.  They double-click it.  It self-elevates
-to admin (UAC prompt), installs AutoNAV into every detected Navisworks Manage
-version (2024 / 2025 / 2026 / 2027), and prints what it did.  No unzipping,
-no folder structure to preserve, no separate dependencies.
+Hand any ONE of these files to any coworker.  They double-click it.  It self-
+elevates to admin (UAC prompt), installs AutoNAV into every detected Navisworks
+Manage version (2024 / 2025 / 2026 / 2027), and prints what it did.  No
+unzipping, no folder structure to preserve, no separate dependencies.
+
+Both files install the same payload into the same locations.  The .exe is the
+preferred deliverable for GitHub Releases and non-technical users; the .cmd is
+the smaller fallback when a .exe might trip antivirus or download policies.
 
 ================================================================================
 
 WHAT'S IN THIS PACKAGE:
 
-ONE-FILE INSTALLER (give this to coworkers):
-- AutoNAV-Installer.cmd       Single self-extracting installer with the DLL +
-                              .addin embedded as base64.  Just double-click.
+ONE-FILE INSTALLERS (give EITHER one to coworkers):
+- AutoNAV-Installer.exe       Single self-elevating Windows .exe (~2 MB).
+                              Best for GitHub Releases and casual users.
+- AutoNAV-Installer.cmd       Same install behavior, smaller (~140 KB),
+                              built from pure Windows tooling.  Use if .exe
+                              is blocked by antivirus or download policy.
 
 CLASSIC MULTI-FILE INSTALLER (for IT admins / custom deployments):
 - Install-AutoNAV.bat         Wrapper that runs Install-AutoNAV.ps1 as admin
@@ -29,8 +38,10 @@ CLASSIC MULTI-FILE INSTALLER (for IT admins / custom deployments):
 
 DEVELOPER TOOLING:
 - Build-Installer.ps1         Regenerates AutoNAV-Installer.cmd from the
-                              current AutoNAV.dll + AutoNAV.addin.  Run on a
-                              Windows machine after rebuilding the plugin.
+                              current AutoNAV.dll + AutoNAV.addin.  No build
+                              tools required beyond stock Windows.
+- Build-Installer-EXE.ps1     Regenerates AutoNAV-Installer.exe.  Requires
+                              Go on the build machine (https://go.dev/dl/).
 
 DOCUMENTATION:
 - INSTALLATION_GUIDE.md       Detailed installation instructions
