@@ -3,23 +3,47 @@
                               Version 3.0.0
 ================================================================================
 
-QUICK START - DO THIS FIRST:
+QUICK START FOR COWORKERS - ONE FILE, JUST DOUBLE-CLICK:
 
-1. Right-click on "Install-AutoNAV.bat"
-2. Select "Run as administrator"
-3. Follow the on-screen instructions
-4. Restart Navisworks Manage
-5. Look for AutoNAV in the Add-Ins ribbon tab
+   AutoNAV-Installer.exe   (recommended - polished single .exe)
+       or
+   AutoNAV-Installer.cmd   (same thing, smaller, no .exe extension)
+
+Hand any ONE of these files to any coworker.  They double-click it.  It self-
+elevates to admin (UAC prompt), installs AutoNAV into every detected Navisworks
+Manage version (2024 / 2025 / 2026 / 2027), and prints what it did.  No
+unzipping, no folder structure to preserve, no separate dependencies.
+
+Both files install the same payload into the same locations.  The .exe is the
+preferred deliverable for GitHub Releases and non-technical users; the .cmd is
+the smaller fallback when a .exe might trip antivirus or download policies.
 
 ================================================================================
 
 WHAT'S IN THIS PACKAGE:
 
-- Install-AutoNAV.bat         Main installer (run this file)
-- Install-AutoNAV.ps1         PowerShell installer script
+ONE-FILE INSTALLERS (give EITHER one to coworkers):
+- AutoNAV-Installer.exe       Single self-elevating Windows .exe (~2 MB).
+                              Best for GitHub Releases and casual users.
+- AutoNAV-Installer.cmd       Same install behavior, smaller (~140 KB),
+                              built from pure Windows tooling.  Use if .exe
+                              is blocked by antivirus or download policy.
+
+CLASSIC MULTI-FILE INSTALLER (for IT admins / custom deployments):
+- Install-AutoNAV.bat         Wrapper that runs Install-AutoNAV.ps1 as admin
+- Install-AutoNAV.ps1         PowerShell installer script (multi-version)
 - AutoNAV.dll                 The AutoNAV plugin executable
 - AutoNAV.addin               Plugin manifest file
 - AutoNAV.pdb                 Debug symbols (optional)
+
+DEVELOPER TOOLING:
+- Build-Installer.ps1         Regenerates AutoNAV-Installer.cmd from the
+                              current AutoNAV.dll + AutoNAV.addin.  No build
+                              tools required beyond stock Windows.
+- Build-Installer-EXE.ps1     Regenerates AutoNAV-Installer.exe.  Requires
+                              Go on the build machine (https://go.dev/dl/).
+
+DOCUMENTATION:
 - INSTALLATION_GUIDE.md       Detailed installation instructions
 - README.txt                  This file
 
@@ -37,15 +61,21 @@ SYSTEM REQUIREMENTS:
 
 INSTALLATION OPTIONS:
 
-METHOD 1 - EASIEST (Recommended):
-   Right-click "Install-AutoNAV.bat" -> "Run as administrator"
-   Installs to ALL detected Navisworks versions automatically.
+METHOD 1 - EASIEST FOR COWORKERS (Recommended):
+   Double-click "AutoNAV-Installer.cmd"
+   Self-elevates via UAC.  Installs to ALL detected Navisworks versions in
+   one step.  This is the ONLY file your coworkers need.
 
-METHOD 2 - POWERSHELL (Advanced):
+METHOD 2 - CLASSIC BATCH INSTALLER:
+   Right-click "Install-AutoNAV.bat" -> "Run as administrator"
+   Requires Install-AutoNAV.ps1 and the AutoNAV.dll / AutoNAV.addin payload
+   to sit next to the .bat.
+
+METHOD 3 - POWERSHELL (Advanced):
    Run PowerShell as Administrator and execute:
    .\Install-AutoNAV.ps1
 
-METHOD 3 - MANUAL (Advanced):
+METHOD 4 - MANUAL (Advanced):
    Create this folder for each Navisworks version you have installed:
    C:\ProgramData\Autodesk\Navisworks Manage 202X\Plugins\AutoNAV\
 
