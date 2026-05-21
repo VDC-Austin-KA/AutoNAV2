@@ -85,6 +85,16 @@
     <NWPath Condition="'$(NWPath)' == '' AND Exists('C:\Program Files\Autodesk\Navisworks Manage 2024\Autodesk.Navisworks.Api.dll')">C:\Program Files\Autodesk\Navisworks Manage 2024\</NWPath>
     <NWPath Condition="'$(NWPath)' == ''">C:\Program Files\Autodesk\Navisworks Manage 2025\</NWPath>
   </PropertyGroup>
+  <!-- Add the matching NW#### DefineConstant for the resolved NWPath so
+       ClashCompat.cs picks the right #if branch.  The per-version
+       Release-NWxxxx configs already set this explicitly above; this block
+       handles the auto-detect Release|x64 case. -->
+  <PropertyGroup>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2024\' AND !$(DefineConstants.Contains('NW2024'))">$(DefineConstants);NW2024</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2025\' AND !$(DefineConstants.Contains('NW2025'))">$(DefineConstants);NW2025</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2026\' AND !$(DefineConstants.Contains('NW2026'))">$(DefineConstants);NW2026</DefineConstants>
+    <DefineConstants Condition="'$(NWPath)' == 'C:\Program Files\Autodesk\Navisworks Manage 2027\' AND !$(DefineConstants.Contains('NW2027'))">$(DefineConstants);NW2027</DefineConstants>
+  </PropertyGroup>
   <!-- References -->
   <ItemGroup>
     <!-- .NET Framework References -->
@@ -132,6 +142,7 @@
     <Compile Include="ClashTestGeneratorEngine.cs" />
     <Compile Include="ClashResultGrouper.cs" />
     <Compile Include="ClashGrouper.cs" />
+    <Compile Include="ClashCompat.cs" />
   </ItemGroup>
   <!-- XAML Pages -->
   <ItemGroup>

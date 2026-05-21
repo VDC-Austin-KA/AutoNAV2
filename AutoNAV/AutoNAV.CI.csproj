@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CI-only project file.
+
+  Same source as AutoNAV.csproj, but uses NuGet PackageReference
+  (Speckle.Navisworks.API) for the Navisworks references instead of the
+  HintPath-to-local-install pattern. This lets GitHub Actions (or any
+  Navisworks-free machine) build a per-version DLL without needing the
+  Navisworks SDK installed.
+
+  Build invocation (per Navisworks year):
+
+    dotnet build AutoNAV/AutoNAV.CI.csproj `
+      -c Release `
+      -p:Platform=x64 `
+      -p:NWYear=2024 `
+      -p:NWPackageVersion=2024.0.0
+
+  NWYear maps to the Release-NW<year> DefineConstants (NW2024 / NW2025 /
+  NW2026 / NW2027) so ClashCompat.cs branches at compile time.
+
+  Speckle.Navisworks.API version pinning (latest at time of writing):
+    2024 -> 2024.0.0
+    2025 -> 2025.0.0
+    2026 -> 2026.0.1
+    2027 -> 2027.0.0
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>AutoNAV</AssemblyName>
+    <RootNamespace>AutoNAV</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Legacy Properties/AssemblyInfo.cs already declares assembly attributes;
+         don't let the SDK auto-generate duplicates. -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Defaults; CI overrides via -p: -->
+    <NWYear Condition="'$(NWYear)' == ''">2025</NWYear>
+    <NWPackageVersion Condition="'$(NWPackageVersion)' == ''">2025.0.0</NWPackageVersion>
+
+    <!-- Map NWYear to a DefineConstants symbol so ClashCompat can branch. -->
+    <DefineConstants>$(DefineConstants);NW$(NWYear)</DefineConstants>
+  </PropertyGroup>
+
+  <!-- All AutoNAV source files; the legacy csproj at AutoNAV.csproj
+       enumerates these explicitly. We use the SDK glob here. -->
+  <ItemGroup>
+    <Compile Remove="bin/**;obj/**" />
+    <Page Remove="bin/**;obj/**" />
+    <None Remove="bin/**;obj/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Speckle.Navisworks.API" Version="$(NWPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>
