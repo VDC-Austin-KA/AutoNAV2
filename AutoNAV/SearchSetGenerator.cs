@@ -473,6 +473,122 @@ namespace AutoNAV
         //       b) does NOT appear in files of any other group.
         //     If no single segment qualifies, try adjacent segment pairs,
         //     then fall back to full discipline segment string.
+        // ─────────────────────────────────────────────────────────────────────
+        // Per-file shortest-unique-subsequence discriminator picker.
+        //
+        // For every loaded file, find the shortest contiguous run of "candidate"
+        // tokens (after stripping the universally-shared prefix and any level
+        // codes) such that the run, wrapped in separators, appears in this file
+        // and no other.  That run becomes both the search-set name and the
+        // search pattern.
+        //
+        // This replaces the old group-by-discipline-string algorithm which
+        // could collapse multiple distinct models into one search set when
+        // their discriminator tokens collided.
+        // ─────────────────────────────────────────────────────────────────────
+        private struct DiscriminatorPick
+        {
+            public string Pattern;       // wrapped in separators, e.g. "-DW-"
+            public string DisplayName;   // unwrapped, e.g. "DW"
+            public string SourceFile;    // for the Detailed variant
+        }
+
+        private static List<DiscriminatorPick> PickDiscriminators(List<string> allFiles, char sep)
+        {
+            // 1. Split every filename into its segments.
+            var fileSegments = allFiles.ToDictionary(
+                f => f,
+                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToList(),
+                StringComparer.OrdinalIgnoreCase);
+
+            // 2. Find segments shared by EVERY file (project prefix, etc.) so we
+            //    can exclude them from the candidate pool.  We compare token
+            //    values, not positions, so the prefix can appear anywhere.
+            HashSet<string> universal = null;
+            foreach (var segs in fileSegments.Values)
+            {
+                var thisSet = new HashSet<string>(segs, StringComparer.OrdinalIgnoreCase);
+                if (universal == null) universal = thisSet;
+                else universal.IntersectWith(thisSet);
+            }
+            universal = universal ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 3. Per file, the candidate token list: order preserved, level codes
+            //    and universally-shared tokens removed.
+            var candidates = fileSegments.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value
+                    .Where(s => !IsLevelCode(s))
+                    .Where(s => !universal.Contains(s))
+                    .ToList(),
+                StringComparer.OrdinalIgnoreCase);
+
+            var picks = new List<DiscriminatorPick>();
+
+            foreach (string file in allFiles)
+            {
+                var tokens = candidates[file];
+                string bestPattern = null;
+                string bestName = null;
+
+                // Try increasing subsequence lengths; shortest unique wins.
+                for (int len = 1; len <= tokens.Count && bestPattern == null; len++)
+                {
+                    for (int start = 0; start + len <= tokens.Count; start++)
+                    {
+                        var slice = tokens.GetRange(start, len);
+                        string joined = string.Join(sep.ToString(), slice);
+                        string candidate = sep + joined + sep;
+
+                        // Unique iff this file's name contains the pattern AND
+                        // no other loaded file's name does.
+                        bool inThis = file.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0;
+                        if (!inThis) continue;
+
+                        bool inOther = false;
+                        foreach (string g in allFiles)
+                        {
+                            if (string.Equals(g, file, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (g.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0)
+                            { inOther = true; break; }
+                        }
+                        if (inOther) continue;
+
+                        bestPattern = candidate;
+                        bestName = joined;
+                        break;
+                    }
+                }
+
+                // Fallback 1: the file's full candidate-token string (still
+                // unique because every candidate set differs in at least one
+                // token by construction, except when filenames are duplicates).
+                if (bestPattern == null && tokens.Count > 0)
+                {
+                    string joined = string.Join(sep.ToString(), tokens);
+                    bestPattern = sep + joined + sep;
+                    bestName = joined;
+                }
+
+                // Fallback 2: the entire filename (used only when two loaded
+                // models share an identical name).
+                if (bestPattern == null)
+                {
+                    bestPattern = file;
+                    bestName = file;
+                }
+
+                picks.Add(new DiscriminatorPick
+                {
+                    Pattern = bestPattern,
+                    DisplayName = bestName,
+                    SourceFile = file
+                });
+            }
+
+            return picks;
+        }
+
         internal static List<string> ComputeDisciplinePatterns(List<string> fileNamesNoExt)
         {
             var allFiles = fileNamesNoExt
@@ -482,108 +598,18 @@ namespace AutoNAV
 
             if (allFiles.Count == 0) return new List<string>();
 
-            // Detect separator: whichever of '-' or '_' appears more across all names
             char sep = DetectSeparator(string.Join("|", allFiles));
 
-            // Split each file into segments
-            var fileSegments = allFiles.ToDictionary(
-                f => f,
-                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToArray());
-
-            // Compute discipline segments for each file (skip prefix, skip level codes)
-            var fileDisciplineSegs = allFiles.ToDictionary(
-                f => f,
-                f =>
-                {
-                    var segs = fileSegments[f];
-                    return segs
-                        .Skip(1)                          // drop project prefix
-                        .Where(s => !IsLevelCode(s))      // drop level codes
-                        .ToList();
-                });
-
-            // Group files by their FULL discipline segment string
-            var groups = fileDisciplineSegs
-                .GroupBy(
-                    kv => string.Join(sep.ToString(), kv.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(kv => kv.Key).ToList());
-
-            var patterns = new List<string>();
-
-            foreach (var group in groups)
+            // De-dup patterns in case two files end up with the same pick
+            // (would only happen for duplicate filenames).
+            var picks = PickDiscriminators(allFiles, sep);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<string>();
+            foreach (var p in picks)
             {
-                List<string> groupFiles = group.Value;
-                string fullDisciplineString = group.Key;
-                string repFile = groupFiles[0];
-                List<string> discSegs = fileDisciplineSegs[repFile];
-                List<string> otherFiles = allFiles.Except(groupFiles).ToList();
-
-                string bestPattern = null;
-
-                // --- Try single segments, shortest first ---
-                foreach (string seg in discSegs.OrderBy(s => s.Length).ThenBy(s => s))
-                {
-                    string candidate = sep + seg + sep;
-
-                    bool inAll = groupFiles.All(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inAll) continue;
-
-                    bool inOther = otherFiles.Any(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inOther) { bestPattern = candidate; break; }
-                }
-
-                // --- Try adjacent segment pairs ---
-                if (bestPattern == null)
-                {
-                    for (int i = 0; i < discSegs.Count - 1 && bestPattern == null; i++)
-                    {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
-                    }
-                }
-
-                // --- Try triples for cases like TPC-DW ---
-                if (bestPattern == null && discSegs.Count >= 3)
-                {
-                    for (int i = 0; i < discSegs.Count - 2 && bestPattern == null; i++)
-                    {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep + discSegs[i + 2] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
-                    }
-                }
-
-                // --- Fallback: full discipline segment string ---
-                if (bestPattern == null && discSegs.Count > 0)
-                    bestPattern = sep + fullDisciplineString + sep;
-
-                // Final fallback: use the filename itself (no wrapping)
-                if (bestPattern == null)
-                    bestPattern = repFile;
-
-                if (!string.IsNullOrEmpty(bestPattern))
-                    patterns.Add(bestPattern);
+                if (seen.Add(p.Pattern)) result.Add(p.Pattern);
             }
-
-            return patterns;
+            return result;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -679,87 +705,29 @@ namespace AutoNAV
                 .ToList();
 
             var results = new List<DisciplinePatternResult>();
-
             if (allFiles.Count == 0) return results;
 
             char sep = DetectSeparator(string.Join("|", allFiles));
 
-            var fileSegments = allFiles.ToDictionary(
-                f => f,
-                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToArray());
-
-            var fileDisciplineSegs = allFiles.ToDictionary(
-                f => f,
-                f =>
-                {
-                    var segs = fileSegments[f];
-                    return segs
-                        .Skip(1)
-                        .Where(s => !IsLevelCode(s))
-                        .ToList();
-                });
-
-            var groups = fileDisciplineSegs
-                .GroupBy(
-                    kv => string.Join(sep.ToString(), kv.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(kv => kv.Key).ToList());
-
-            foreach (var group in groups)
+            // De-dup picks that resolve to the same pattern (only happens when
+            // two loaded models have byte-identical names), merging the source
+            // file lists.
+            var picks = PickDiscriminators(allFiles, sep);
+            var byPattern = new Dictionary<string, DisciplinePatternResult>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in picks)
             {
-                List<string> groupFiles = group.Value;
-                string repFile = groupFiles[0];
-                List<string> discSegs = fileDisciplineSegs[repFile];
-                List<string> otherFiles = allFiles.Except(groupFiles).ToList();
-
-                string bestPattern = null;
-
-                foreach (string seg in discSegs.OrderBy(s => s.Length).ThenBy(s => s))
+                if (!byPattern.TryGetValue(p.Pattern, out var existing))
                 {
-                    string candidate = sep + seg + sep;
-
-                    bool inAll = groupFiles.All(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inAll) continue;
-
-                    bool inOther = otherFiles.Any(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inOther) { bestPattern = candidate; break; }
-                }
-
-                if (bestPattern == null)
-                {
-                    for (int i = 0; i < discSegs.Count - 1 && bestPattern == null; i++)
+                    existing = new DisciplinePatternResult
                     {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
-                    }
+                        DisplayName = p.DisplayName,
+                        SearchPattern = p.Pattern,
+                        MatchedFiles = new List<string>()
+                    };
+                    byPattern[p.Pattern] = existing;
+                    results.Add(existing);
                 }
-
-                if (bestPattern == null && discSegs.Count > 0)
-                    bestPattern = sep + string.Join(sep.ToString(), discSegs) + sep;
-
-                if (bestPattern == null)
-                    bestPattern = repFile;
-
-                if (!string.IsNullOrEmpty(bestPattern))
-                {
-                    results.Add(new DisciplinePatternResult
-                    {
-                        DisplayName = StripSeparatorWrapping(bestPattern),
-                        SearchPattern = bestPattern,
-                        MatchedFiles = groupFiles
-                    });
-                }
+                existing.MatchedFiles.Add(p.SourceFile);
             }
 
             return results;
