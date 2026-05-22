@@ -1,2 +1,0 @@
-# ClashNAV
-# AutoNAV
