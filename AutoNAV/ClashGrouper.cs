@@ -35,37 +35,14 @@ namespace AutoNAV
         // Public entry points
         // ─────────────────────────────────────────────────────────────
 
-        // Default values matched in MainWindow.xaml so the UI and the API agree.
-        public const int DefaultMaxClashesPerGroup = 15;
-        public const int MinClashesPerGroup        = 1;
-        public const int MaxClashesPerGroup        = 200;
-
         public static void GroupClashes(
             ClashTest selectedClashTest,
             GroupingMode groupingMode,
             GroupingMode subgroupingMode,
             bool keepExistingGroups)
         {
-            // Back-compat overload: legacy callers get the old behaviour with no
-            // template and no per-group cap.
-            GroupClashes(selectedClashTest, groupingMode, subgroupingMode, keepExistingGroups,
-                         namingTemplate: null, maxClashesPerGroup: int.MaxValue);
-        }
-
-        public static void GroupClashes(
-            ClashTest selectedClashTest,
-            GroupingMode groupingMode,
-            GroupingMode subgroupingMode,
-            bool keepExistingGroups,
-            string namingTemplate,
-            int maxClashesPerGroup)
-        {
             try
             {
-                if (maxClashesPerGroup < MinClashesPerGroup) maxClashesPerGroup = MinClashesPerGroup;
-                if (maxClashesPerGroup > MaxClashesPerGroup && maxClashesPerGroup != int.MaxValue)
-                    maxClashesPerGroup = MaxClashesPerGroup;
-
                 List<ClashResult> clashResults =
                     GetIndividualClashResults(selectedClashTest, keepExistingGroups).ToList();
 
@@ -89,11 +66,6 @@ namespace AutoNAV
                     ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
                 }
 
-                // Apply user naming template + per-group size cap. Empty template
-                // preserves the legacy DisplayNames computed by GroupBy*.
-                clashResultGroups = ApplyTemplateAndSplit(
-                    clashResultGroups, selectedClashTest, namingTemplate, maxClashesPerGroup);
-
                 if (keepExistingGroups)
                 {
                     var existingGroups = BackupExistingClashGroups(selectedClashTest).ToList();
@@ -106,183 +78,6 @@ namespace AutoNAV
             {
                 throw new Exception("Error grouping clashes: " + ex.Message, ex);
             }
-        }
-
-        // ─────────────────────────────────────────────────────────────
-        // Naming template + max-group-size machinery
-        // ─────────────────────────────────────────────────────────────
-
-        private struct NamingContext
-        {
-            public string Month, Day, Year;
-            public string Grid, Level;
-            public string TestName;
-            public string SelectionA, SelectionB;
-        }
-
-        private static NamingContext BuildContext(ClashResultGroup group, ClashTest test)
-        {
-            var now = DateTime.Now;
-            var ctx = new NamingContext
-            {
-                Month = now.ToString("MM"),
-                Day = now.ToString("dd"),
-                Year = now.ToString("yyyy"),
-                TestName = test?.DisplayName ?? "",
-                Grid = "",
-                Level = "",
-                SelectionA = "",
-                SelectionB = ""
-            };
-
-            // Pull Grid + Level from the first clash result in the group.
-            ClashResult first = null;
-            foreach (var child in group.Children)
-            {
-                if (child is ClashResult cr) { first = cr; break; }
-            }
-            if (first != null)
-            {
-                try
-                {
-                    var grids = Application.MainDocument.Grids;
-                    var gsys = grids != null ? grids.ActiveSystem : null;
-                    if (gsys != null)
-                    {
-                        var gi = gsys.ClosestIntersection(first.Center);
-                        if (gi != null)
-                        {
-                            ctx.Grid = string.IsNullOrEmpty(gi.DisplayName) ? "" : gi.DisplayName;
-                            if (gi.Level != null && !string.IsNullOrEmpty(gi.Level.DisplayName))
-                                ctx.Level = gi.Level.DisplayName;
-                        }
-                    }
-                }
-                catch { /* best effort — grid system not available */ }
-            }
-
-            // Selection A / B from test DisplayName split on " vs " (the project's
-            // own naming convention used by ClashTestGeneratorEngine). For tests
-            // that don't follow it, Selection A = entire test name, Selection B = "".
-            if (!string.IsNullOrEmpty(ctx.TestName))
-            {
-                int vs = ctx.TestName.IndexOf(" vs ", StringComparison.OrdinalIgnoreCase);
-                if (vs > 0)
-                {
-                    ctx.SelectionA = ctx.TestName.Substring(0, vs).Trim();
-                    ctx.SelectionB = ctx.TestName.Substring(vs + 4).Trim();
-                }
-                else
-                {
-                    ctx.SelectionA = ctx.TestName;
-                }
-            }
-
-            return ctx;
-        }
-
-        private static string ApplyNamingTemplate(
-            string template, NamingContext ctx,
-            Dictionary<string, int> sequenceCounter)
-        {
-            if (string.IsNullOrWhiteSpace(template)) return null;
-
-            string baseName = template
-                .Replace("{Month}", ctx.Month)
-                .Replace("{Day}", ctx.Day)
-                .Replace("{Year}", ctx.Year)
-                .Replace("{Grid}", ctx.Grid)
-                .Replace("{Level}", ctx.Level)
-                .Replace("{Test Name}", ctx.TestName)
-                .Replace("{Selection A}", ctx.SelectionA)
-                .Replace("{Selection B}", ctx.SelectionB);
-
-            // {#} bumps every time the same base (post-substitution, with the {#}
-            // placeholder stripped) is requested. Reserves a sequence per unique
-            // base name.
-            string key = baseName.Replace("{#}", "").Trim();
-            int n = sequenceCounter.TryGetValue(key, out var c) ? c + 1 : 1;
-            sequenceCounter[key] = n;
-
-            return baseName.Replace("{#}", n.ToString());
-        }
-
-        // Walks every group: renames per template (when set) and splits any group
-        // whose ClashResult child count exceeds the cap. Returns a new list.
-        private static List<ClashResultGroup> ApplyTemplateAndSplit(
-            List<ClashResultGroup> groups,
-            ClashTest test,
-            string namingTemplate,
-            int maxClashesPerGroup)
-        {
-            bool hasTemplate = !string.IsNullOrWhiteSpace(namingTemplate);
-            bool hasCap = maxClashesPerGroup > 0 && maxClashesPerGroup != int.MaxValue;
-            if (!hasTemplate && !hasCap) return groups;
-
-            var seqCounter = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var result = new List<ClashResultGroup>();
-
-            foreach (var group in groups)
-            {
-                // Snapshot children so chunking is deterministic.
-                var children = new List<SavedItem>();
-                foreach (SavedItem c in group.Children) children.Add(c);
-
-                string legacyName = group.DisplayName;
-
-                // Empty group: keep with new/legacy name, no splitting.
-                if (children.Count == 0)
-                {
-                    if (hasTemplate)
-                    {
-                        var ctx = BuildContext(group, test);
-                        group.DisplayName = ApplyNamingTemplate(namingTemplate, ctx, seqCounter) ?? legacyName;
-                    }
-                    result.Add(group);
-                    continue;
-                }
-
-                int chunkSize = (hasCap && maxClashesPerGroup < children.Count)
-                                    ? maxClashesPerGroup
-                                    : children.Count;
-                int chunkCount = (int)Math.Ceiling(children.Count / (double)chunkSize);
-
-                for (int idx = 0; idx < chunkCount; idx++)
-                {
-                    int offset = idx * chunkSize;
-                    var slice = children.Skip(offset).Take(chunkSize).ToList();
-
-                    ClashResultGroup outGroup;
-                    if (chunkCount == 1)
-                    {
-                        // No split — reuse the original group instance.
-                        outGroup = group;
-                    }
-                    else
-                    {
-                        outGroup = new ClashResultGroup();
-                        foreach (var c in slice) outGroup.Children.Add(c);
-                    }
-
-                    string newName;
-                    if (hasTemplate)
-                    {
-                        var ctx = BuildContext(outGroup, test);
-                        newName = ApplyNamingTemplate(namingTemplate, ctx, seqCounter) ?? legacyName;
-                    }
-                    else
-                    {
-                        newName = chunkCount > 1
-                                      ? legacyName + " (" + (idx + 1) + ")"
-                                      : legacyName;
-                    }
-
-                    outGroup.DisplayName = newName;
-                    result.Add(outGroup);
-                }
-            }
-
-            return result;
         }
 
         // ─────────────────────────────────────────────────────────────

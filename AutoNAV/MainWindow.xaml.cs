@@ -472,6 +472,41 @@ namespace AutoNAV
 
         #endregion
 
+        #region Function 6 Event Handlers (Walls / Floors Grouping)
+
+        private void OnFunction6Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var confirm = MessageBox.Show(
+                    "Before continuing, make sure all clash tests have been run in Clash Detective.\n\n" +
+                    "This will:\n" +
+                    "  1. Group clashes into Walls and Floors using the matching search sets\n" +
+                    "  2. Leave all other clashes ungrouped (ready for Sherlock Distill)\n\n" +
+                    "Continue?",
+                    "Function 6 — Walls / Floors Grouping",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (confirm != MessageBoxResult.Yes) return;
+
+                SetStatus("Running Function 6 — grouping by Walls / Floors...");
+                string result = ClashGrouper.GroupAllTestsByWallsAndFloors();
+                SetStatus("Function 6 complete.");
+
+                MessageBox.Show(result, "Function 6 — Complete",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Function 6 failed.");
+                MessageBox.Show("Error in Function 6:\n\n" + ex.Message,
+                    "Function 6 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        #endregion
+
         #region Function 5 Event Handlers
 
         private void OnGroupClashesClick(object sender, RoutedEventArgs e)
@@ -494,8 +529,6 @@ namespace AutoNAV
                 string groupingModeStr = groupingModeItem?.Tag as string;
                 string subGroupingModeStr = subGroupingModeItem?.Tag as string;
                 bool keepExisting = chkKeepExistingGroups.IsChecked == true;
-                string namingTemplate = txtGroupNameTemplate?.Text;
-                int maxClashesPerGroup = ReadMaxClashesPerGroup();
 
                 ClashGrouper.GroupingMode groupingMode = ParseGroupingMode(groupingModeStr);
                 ClashGrouper.GroupingMode subGroupingMode = ParseGroupingMode(subGroupingModeStr);
@@ -537,8 +570,7 @@ namespace AutoNAV
                     return;
                 }
 
-                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting,
-                                          namingTemplate, maxClashesPerGroup);
+                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting);
 
                 MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
                     "Group Clashes", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -560,8 +592,6 @@ namespace AutoNAV
                 string groupingModeStr = groupingModeItem?.Tag as string;
                 string subGroupingModeStr = subGroupingModeItem?.Tag as string;
                 bool keepExisting = chkKeepExistingGroups.IsChecked == true;
-                string namingTemplate = txtGroupNameTemplate?.Text;
-                int maxClashesPerGroup = ReadMaxClashesPerGroup();
 
                 ClashGrouper.GroupingMode groupingMode = ParseGroupingMode(groupingModeStr);
                 ClashGrouper.GroupingMode subGroupingMode = ParseGroupingMode(subGroupingModeStr);
@@ -601,8 +631,7 @@ namespace AutoNAV
                 {
                     try
                     {
-                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting,
-                                                  namingTemplate, maxClashesPerGroup);
+                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting);
                         groupedCount++;
                     }
                     catch (Exception ex)
@@ -680,18 +709,6 @@ namespace AutoNAV
 
         private void OnClashTestSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-        }
-
-        // Reads txtMaxClashesPerGroup, clamps to the ClashGrouper-defined range,
-        // falls back to the default when blank or non-numeric.
-        private int ReadMaxClashesPerGroup()
-        {
-            string raw = txtMaxClashesPerGroup?.Text;
-            if (!int.TryParse(raw, out int n))
-                return ClashGrouper.DefaultMaxClashesPerGroup;
-            if (n < ClashGrouper.MinClashesPerGroup) n = ClashGrouper.MinClashesPerGroup;
-            if (n > ClashGrouper.MaxClashesPerGroup) n = ClashGrouper.MaxClashesPerGroup;
-            return n;
         }
 
         private ClashGrouper.GroupingMode ParseGroupingMode(string modeStr)
