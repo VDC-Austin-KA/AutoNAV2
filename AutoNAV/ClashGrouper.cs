@@ -45,6 +45,142 @@ namespace AutoNAV
             GroupClashes(selectedClashTest, groupingMode, subgroupingMode, keepExistingGroups, namingTemplate: null);
         }
 
+        // Overload with status filters.
+        //
+        // newStatusFilter      - clashes whose Status is in this set are eligible
+        //                        for fresh grouping/naming.  Empty set ≡ "no New
+        //                        Clashes pass set" (the regroup path is taken).
+        // regroupStatusFilter  - when newStatusFilter is empty, existing
+        //                        ClashResultGroups whose children include any
+        //                        clash matching this set are renamed in place
+        //                        via the template.  Ignored when newStatusFilter
+        //                        is non-empty (UI ghosts those checkboxes).
+        public static void GroupClashes(
+            ClashTest selectedClashTest,
+            GroupingMode groupingMode,
+            GroupingMode subgroupingMode,
+            bool keepExistingGroups,
+            string namingTemplate,
+            ISet<ClashResultStatus> newStatusFilter,
+            ISet<ClashResultStatus> regroupStatusFilter)
+        {
+            // When the user has unchecked every "New Clashes" status, the
+            // workflow is "regroup & rename" only: walk existing groups, filter
+            // by regroupStatusFilter, and rename via the template.  No fresh
+            // grouping happens.
+            bool isRegroupOnly = (newStatusFilter == null || newStatusFilter.Count == 0)
+                              && (regroupStatusFilter != null && regroupStatusFilter.Count > 0)
+                              && !string.IsNullOrWhiteSpace(namingTemplate);
+
+            if (isRegroupOnly)
+            {
+                RegroupAndRenameExisting(selectedClashTest, regroupStatusFilter, namingTemplate);
+                return;
+            }
+
+            // Otherwise, normal grouping path with optional status filter on the
+            // input clashResults.
+            GroupClashes(selectedClashTest, groupingMode, subgroupingMode, keepExistingGroups, namingTemplate,
+                         (IEnumerable<ClashResultStatus>)newStatusFilter);
+        }
+
+        // Variant that accepts a status filter on the source clash results.
+        public static void GroupClashes(
+            ClashTest selectedClashTest,
+            GroupingMode groupingMode,
+            GroupingMode subgroupingMode,
+            bool keepExistingGroups,
+            string namingTemplate,
+            IEnumerable<ClashResultStatus> newStatusFilter)
+        {
+            HashSet<ClashResultStatus> filter = null;
+            if (newStatusFilter != null)
+            {
+                filter = new HashSet<ClashResultStatus>(newStatusFilter);
+                if (filter.Count == 0) filter = null;
+            }
+
+            try
+            {
+                List<ClashResult> clashResults =
+                    GetIndividualClashResults(selectedClashTest, keepExistingGroups).ToList();
+                if (filter != null)
+                    clashResults = clashResults.Where(cr => filter.Contains(cr.Status)).ToList();
+
+                List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+                List<ClashResult> ungroupedClashResults = new List<ClashResult>();
+
+                if (groupingMode == GroupingMode.WallsAndFloors)
+                {
+                    GroupByWallsAndFloorsViaSearchSets(
+                        clashResults, out clashResultGroups, out ungroupedClashResults);
+                }
+                else
+                {
+                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "");
+                    if (subgroupingMode != GroupingMode.None)
+                        CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                    ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
+                }
+
+                clashResultGroups = ApplyTemplateToGroups(clashResultGroups, selectedClashTest, namingTemplate);
+
+                if (!string.IsNullOrWhiteSpace(namingTemplate) && ungroupedClashResults.Count > 0)
+                {
+                    var fallback = new ClashResultGroup { DisplayName = "" };
+                    foreach (var cr in ungroupedClashResults) fallback.Children.Add(cr);
+                    ungroupedClashResults = new List<ClashResult>();
+                    var wrapped = new List<ClashResultGroup> { fallback };
+                    wrapped = ApplyTemplateToGroups(wrapped, selectedClashTest, namingTemplate);
+                    clashResultGroups.AddRange(wrapped);
+                }
+
+                if (keepExistingGroups)
+                {
+                    var existingGroups = BackupExistingClashGroups(selectedClashTest).ToList();
+                    clashResultGroups.AddRange(existingGroups);
+                }
+
+                ProcessClashGroup(clashResultGroups, ungroupedClashResults, selectedClashTest);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error grouping clashes: " + ex.Message, ex);
+            }
+        }
+
+        // Walks an existing test's top-level ClashResultGroup children; for each
+        // group whose descendant clashes include any with a status in the
+        // filter, applies the template via TestsEditDisplayName.  No clashes
+        // are moved, only renamed.
+        private static void RegroupAndRenameExisting(
+            ClashTest test, ISet<ClashResultStatus> statusFilter, string template)
+        {
+            if (test == null || statusFilter == null || statusFilter.Count == 0) return;
+            if (string.IsNullOrWhiteSpace(template)) return;
+
+            var toRename = new List<ClashResultGroup>();
+            foreach (var child in test.Children)
+            {
+                if (!(child is ClashResultGroup grp)) continue;
+                if (GroupContainsAnyStatus(grp, statusFilter))
+                    toRename.Add(grp);
+            }
+
+            if (toRename.Count > 0)
+                RenameGroupsWithTemplate(toRename, test, template);
+        }
+
+        private static bool GroupContainsAnyStatus(ClashResultGroup grp, ISet<ClashResultStatus> statuses)
+        {
+            foreach (var item in grp.Children)
+            {
+                if (item is ClashResult cr && statuses.Contains(cr.Status)) return true;
+                if (item is ClashResultGroup nested && GroupContainsAnyStatus(nested, statuses)) return true;
+            }
+            return false;
+        }
+
         // Overload that accepts a naming-template string.  When non-empty, every
         // produced ClashResultGroup is renamed by ApplyTemplateToGroups using
         // tokens {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA}

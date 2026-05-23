@@ -212,7 +212,7 @@ Foreground="#333333">
                                     </ComboBox>
                                 </StackPanel>
 
-                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" Margin="0,0,0,10"/>
+                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" IsChecked="True" Margin="0,0,0,10"/>
 
                                 <!-- CLASH TEST SELECTION -->
                                 <TextBlock Text="3. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
@@ -239,6 +239,35 @@ Foreground="#333333">
                                     Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.
                                     Missing data falls back to placeholders (LXX, AREA) so every clash is named.
                                 </TextBlock>
+
+                                <!-- STATUS FILTERS -->
+                                <TextBlock Text="5. Status Filters:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+
+                                <Border Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="New Clashes — statuses to GROUP &amp; NAME" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Only clashes whose status matches one of these will be grouped." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Name="chkNewStatusNew"         Content="New"          FontSize="10" IsChecked="True"  Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                            <CheckBox Name="chkNewStatusActive"      Content="Active"       FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                            <CheckBox Name="chkNewStatusReviewed"    Content="Under Review" FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Name="brdRegroup" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,10">
+                                    <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
+                                        <TextBlock Text="Regroup &amp; Rename — re-apply template to existing groups with these statuses" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Enabled only when no &quot;New Clashes&quot; status is selected above." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Name="chkRegroupStatusNew"      Content="New"          FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusActive"   Content="Active"       FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusApproved" Content="Approved"     FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"     FontSize="10" Margin="0,0,12,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- GROUP BUTTONS -->
                                 <StackPanel Orientation="Horizontal" Margin="0,5,0,0">

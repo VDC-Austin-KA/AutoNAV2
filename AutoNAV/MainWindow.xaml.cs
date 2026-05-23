@@ -571,7 +571,10 @@ namespace AutoNAV
                 }
 
                 string template = GetSelectedNamingTemplate();
-                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting, template);
+                var newStatuses = GetNewStatusFilter();
+                var regroupStatuses = GetRegroupStatusFilter();
+                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting, template,
+                                          newStatuses, regroupStatuses);
 
                 MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
                     "Group Clashes", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -626,6 +629,8 @@ namespace AutoNAV
                 }
 
                 string template = GetSelectedNamingTemplate();
+                var newStatuses = GetNewStatusFilter();
+                var regroupStatuses = GetRegroupStatusFilter();
                 int groupedCount = 0;
                 int failedCount = 0;
 
@@ -633,7 +638,8 @@ namespace AutoNAV
                 {
                     try
                     {
-                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting, template);
+                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting, template,
+                                                  newStatuses, regroupStatuses);
                         groupedCount++;
                     }
                     catch (Exception ex)
@@ -723,6 +729,44 @@ namespace AutoNAV
         {
             var cb = cmbNamingTemplate?.SelectedItem as ComboBoxItem;
             return cb?.Tag as string ?? "";
+        }
+
+        // Reads the "New Clashes" status checkboxes; empty set means no filter.
+        private HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> GetNewStatusFilter()
+        {
+            var s = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+            if (chkNewStatusNew?.IsChecked      == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.New);
+            if (chkNewStatusActive?.IsChecked   == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Active);
+            if (chkNewStatusReviewed?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed);
+            return s;
+        }
+
+        // Reads the "Regroup & Rename" status checkboxes; only meaningful when the
+        // section is enabled (no New-Clashes status selected). Empty set = nothing
+        // to regroup.
+        private HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> GetRegroupStatusFilter()
+        {
+            var s = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+            if (pnlRegroup?.IsEnabled != true) return s;
+            if (chkRegroupStatusNew?.IsChecked      == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.New);
+            if (chkRegroupStatusActive?.IsChecked   == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Active);
+            if (chkRegroupStatusReviewed?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed);
+            if (chkRegroupStatusApproved?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Approved);
+            if (chkRegroupStatusResolved?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Resolved);
+            return s;
+        }
+
+        // Toggles the Regroup section's enabled state based on the New Clashes
+        // checkboxes. When ANY New Clashes status is selected, Regroup is
+        // ghosted; when ALL are unselected, Regroup is editable.
+        private void OnNewStatusChanged(object sender, RoutedEventArgs e)
+        {
+            if (pnlRegroup == null) return;
+            bool anyNew = (chkNewStatusNew?.IsChecked == true)
+                       || (chkNewStatusActive?.IsChecked == true)
+                       || (chkNewStatusReviewed?.IsChecked == true);
+            pnlRegroup.IsEnabled = !anyNew;
+            pnlRegroup.Opacity = anyNew ? 0.5 : 1.0;
         }
 
         // Rebuilds txtNamingPreview live using a synthetic sample context.
