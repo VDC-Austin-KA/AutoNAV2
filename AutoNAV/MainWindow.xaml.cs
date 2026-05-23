@@ -114,27 +114,46 @@ namespace AutoNAV
                 {
                     Tag = disc,
                     Margin = new Thickness(8, 0, 0, 0),
-                    Width = 170,
+                    Width = 240,
                     Height = 24,
                     FontSize = 11
                 };
 
-                // Property options - Element, Category, Workset, etc.
-                string[,] propertyOptions = new string[,]
+                // Property options come from the canonical discipline the
+                // search set was tagged with by Function 1.  When the registry
+                // has no entry (e.g. the user re-opened AutoNAV without
+                // re-running Function 1) we recover by looking the search set
+                // name up in the dictionary one more time.
+                string canonical = null;
+                SearchSetGenerator.DisciplineRegistry.TryGetValue(disc, out canonical);
+                if (string.IsNullOrEmpty(canonical))
                 {
-                    { "Element Category", "Element", "Category" },
-                    { "Element Workset", "Element", "Workset" },
-                    { "Element Level", "Element", "Level" },
-                    { "Element System", "Element", "System Name" },
-                    { "Element Type", "Element", "Type" }
-                };
+                    string _code; string _canon;
+                    if (SearchSetGenerator.TryMatchDiscipline(disc, out _code, out _canon))
+                        canonical = _canon;
+                }
 
-                for (int i = 0; i < propertyOptions.GetLength(0); i++)
+                if (!string.IsNullOrEmpty(canonical))
+                {
+                    var disciplineLabel = new TextBlock
+                    {
+                        Text = "(" + canonical + ")",
+                        FontSize = 10,
+                        Foreground = Brushes.Gray,
+                        FontStyle = FontStyles.Italic,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(6, 0, 0, 0),
+                    };
+                    row.Children.Add(disciplineLabel);
+                }
+
+                var options = SearchSetGenerator.PropertyOptionsFor(canonical);
+                foreach (var opt in options)
                 {
                     cmb.Items.Add(new ComboBoxItem
                     {
-                        Content = propertyOptions[i, 0],
-                        Tag = propertyOptions[i, 1] + "|" + propertyOptions[i, 2]
+                        Content = opt.Label,
+                        Tag = opt.Category + "|" + opt.Property,
                     });
                 }
                 cmb.SelectedIndex = 0;
@@ -834,6 +853,131 @@ namespace AutoNAV
             {
                 MessageBox.Show("Rename failed:\n\n" + ex.Message, "Rename Selected",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // AutoNAVismate — one-button full workflow
+        // ─────────────────────────────────────────────────────────────────────
+        private void OnAutoNAVismateClick(object sender, RoutedEventArgs e)
+        {
+            btnAutoNAVismate.IsEnabled = false;
+            try
+            {
+                SetAutoProgress("Step 1/5  Function 1 — discipline search sets…");
+                SearchSetGenerator.GenerateFunction1SearchSets();
+
+                SetAutoProgress("Step 2/5  Function 2 — element-property search sets…");
+                // Refresh the discipline UI then run Function 2 with the
+                // default (first) property option for every discipline.
+                LoadDisciplineList();
+                System.Windows.Forms.Application.DoEvents();   // let the WPF tree update
+                try
+                {
+                    OnFunction2Click(this, new RoutedEventArgs());
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("[AutoNAV] AutoNAVismate Function 2 failed: " + ex.Message);
+                }
+
+                SetAutoProgress("Step 3/5  Function 4 — generating + running clash tests…");
+                bool clashRunOk = false;
+                try
+                {
+                    _clashEngine.GenerateClashTests();   // generate + auto-run inside
+                    clashRunOk = true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("[AutoNAV] AutoNAVismate Function 4 failed: " + ex.Message);
+                }
+                if (!clashRunOk)
+                {
+                    var choice = MessageBox.Show(
+                        "Function 4 couldn't run the clash tests automatically.\n\n" +
+                        "Open Navisworks' Clash Detective panel and click 'Update All' on the Home tab, then click OK to continue. Cancel to abort AutoNAVismate.",
+                        "AutoNAVismate — manual step required",
+                        MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+                    if (choice != MessageBoxResult.OK)
+                    {
+                        SetAutoProgress("Aborted by user before Function 5.");
+                        return;
+                    }
+                }
+
+                SetAutoProgress("Step 4/5  Function 5 — grouping Walls / Floors…");
+                try
+                {
+                    string summary = ClashGrouper.GroupAllTestsByWallsAndFloors();
+                    System.Diagnostics.Debug.WriteLine("[AutoNAV] " + summary);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("[AutoNAV] AutoNAVismate Function 5 failed: " + ex.Message);
+                }
+
+                SetAutoProgress("Step 5/5  Function 6 — grouping + naming remaining clashes…");
+                RunFunction6WithDefaults();
+
+                SetAutoProgress("AutoNAVismate complete. Open Clash Detective to review.");
+                MessageBox.Show("AutoNAVismate finished.\n\nAll five steps ran. Check Clash Detective for results.",
+                    "AutoNAVismate", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                SetAutoProgress("Fatal error: " + ex.Message);
+                MessageBox.Show("AutoNAVismate hit a fatal error:\n\n" + ex.Message,
+                    "AutoNAVismate", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                btnAutoNAVismate.IsEnabled = true;
+            }
+        }
+
+        private void SetAutoProgress(string msg)
+        {
+            if (txtAutoNAVismateProgress != null) txtAutoNAVismateProgress.Text = msg;
+            System.Diagnostics.Debug.WriteLine("[AutoNAVismate] " + msg);
+        }
+
+        // Loops every clash test, calls GroupClashes with the default template
+        // and "Keep existing groups" semantics so Function 5's work survives.
+        private void RunFunction6WithDefaults()
+        {
+            Document doc = NavApp.ActiveDocument;
+            if (doc == null) return;
+            DocumentClash documentClash = doc.GetClash();
+            if (documentClash == null) return;
+            var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
+            if (tests.Count == 0) return;
+
+            // Default template = first preset (the user-spec example).
+            string template = (cmbNamingTemplate.Items[0] as ComboBoxItem)?.Tag as string ?? "";
+            var newStatuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>
+            {
+                Autodesk.Navisworks.Api.Clash.ClashResultStatus.New,
+            };
+            var regroupStatuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+
+            foreach (ClashTest test in tests)
+            {
+                try
+                {
+                    ClashGrouper.GroupClashes(
+                        test,
+                        ClashGrouper.GroupingMode.None,            // primary mode
+                        ClashGrouper.GroupingMode.GridIntersection, // sub-group fallback so {Area} populates
+                        keepExistingGroups: true,
+                        namingTemplate: template,
+                        newStatusFilter: newStatuses,
+                        regroupStatusFilter: regroupStatuses);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AutoNAVismate] F6 failed for '{test.DisplayName}': {ex.Message}");
+                }
             }
         }
 

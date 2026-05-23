@@ -296,6 +296,55 @@ Foreground="#333333">
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+
+            <!-- TAB 3: AutoNAVismate -->
+            <TabItem Header="AutoNAVismate">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="20">
+                        <TextBlock Text="AutoNAVismate — one-button full workflow" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#666666" Margin="0,0,0,20">
+                            Runs every AutoNAV function in sequence with their default settings.
+                            You'll only be prompted when the plugin can't automatically determine a value
+                            (e.g. an unknown discipline for a loaded model).
+                        </TextBlock>
+
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,15">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Workflow steps" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
+                                    1. Function 1 — discipline search sets (prompts only on unrecognised disciplines).
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
+                                    2. Function 2 — element-property search sets, using each discipline's default property option.
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
+                                    3. Function 4 — generate every cross-discipline clash test pair AND auto-run them.
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
+                                    4. Function 5 — group Walls / Floors across every clash test.
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
+                                    5. Function 6 — group + name remaining clashes with the default template (status: New).
+                                </TextBlock>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" FontStyle="Italic" Margin="0,8,0,0">
+                                    "Keep existing groups" defaults to on, so Function 6 won't undo Function 5's work.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,15">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Run" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <Button Name="btnAutoNAVismate" Content="Run AutoNAVismate" Click="OnAutoNAVismateClick"
+                                        Padding="14,10" Background="#0078D4" Foreground="White" FontWeight="Bold"
+                                        FontSize="14" Width="240" HorizontalAlignment="Left"/>
+                                <TextBlock Name="txtAutoNAVismateProgress" Text="" FontSize="11" Foreground="#0078D4"
+                                           Margin="0,12,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </Window>
