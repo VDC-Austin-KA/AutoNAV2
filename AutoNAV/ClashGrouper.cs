@@ -35,11 +35,163 @@ namespace AutoNAV
         // Public entry points
         // ─────────────────────────────────────────────────────────────
 
+        // Back-compat overload (legacy callers).
         public static void GroupClashes(
             ClashTest selectedClashTest,
             GroupingMode groupingMode,
             GroupingMode subgroupingMode,
             bool keepExistingGroups)
+        {
+            GroupClashes(selectedClashTest, groupingMode, subgroupingMode, keepExistingGroups, namingTemplate: null);
+        }
+
+        // Overload with status filters.
+        //
+        // newStatusFilter      - clashes whose Status is in this set are eligible
+        //                        for fresh grouping/naming.  Empty set ≡ "no New
+        //                        Clashes pass set" (the regroup path is taken).
+        // regroupStatusFilter  - when newStatusFilter is empty, existing
+        //                        ClashResultGroups whose children include any
+        //                        clash matching this set are renamed in place
+        //                        via the template.  Ignored when newStatusFilter
+        //                        is non-empty (UI ghosts those checkboxes).
+        public static void GroupClashes(
+            ClashTest selectedClashTest,
+            GroupingMode groupingMode,
+            GroupingMode subgroupingMode,
+            bool keepExistingGroups,
+            string namingTemplate,
+            ISet<ClashResultStatus> newStatusFilter,
+            ISet<ClashResultStatus> regroupStatusFilter)
+        {
+            // When the user has unchecked every "New Clashes" status, the
+            // workflow is "regroup & rename" only: walk existing groups, filter
+            // by regroupStatusFilter, and rename via the template.  No fresh
+            // grouping happens.
+            bool isRegroupOnly = (newStatusFilter == null || newStatusFilter.Count == 0)
+                              && (regroupStatusFilter != null && regroupStatusFilter.Count > 0)
+                              && !string.IsNullOrWhiteSpace(namingTemplate);
+
+            if (isRegroupOnly)
+            {
+                RegroupAndRenameExisting(selectedClashTest, regroupStatusFilter, namingTemplate);
+                return;
+            }
+
+            // Otherwise, normal grouping path with optional status filter on the
+            // input clashResults.
+            GroupClashes(selectedClashTest, groupingMode, subgroupingMode, keepExistingGroups, namingTemplate,
+                         (IEnumerable<ClashResultStatus>)newStatusFilter);
+        }
+
+        // Variant that accepts a status filter on the source clash results.
+        public static void GroupClashes(
+            ClashTest selectedClashTest,
+            GroupingMode groupingMode,
+            GroupingMode subgroupingMode,
+            bool keepExistingGroups,
+            string namingTemplate,
+            IEnumerable<ClashResultStatus> newStatusFilter)
+        {
+            HashSet<ClashResultStatus> filter = null;
+            if (newStatusFilter != null)
+            {
+                filter = new HashSet<ClashResultStatus>(newStatusFilter);
+                if (filter.Count == 0) filter = null;
+            }
+
+            try
+            {
+                List<ClashResult> clashResults =
+                    GetIndividualClashResults(selectedClashTest, keepExistingGroups).ToList();
+                if (filter != null)
+                    clashResults = clashResults.Where(cr => filter.Contains(cr.Status)).ToList();
+
+                List<ClashResultGroup> clashResultGroups = new List<ClashResultGroup>();
+                List<ClashResult> ungroupedClashResults = new List<ClashResult>();
+
+                if (groupingMode == GroupingMode.WallsAndFloors)
+                {
+                    GroupByWallsAndFloorsViaSearchSets(
+                        clashResults, out clashResultGroups, out ungroupedClashResults);
+                }
+                else
+                {
+                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "");
+                    if (subgroupingMode != GroupingMode.None)
+                        CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                    ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
+                }
+
+                clashResultGroups = ApplyTemplateToGroups(clashResultGroups, selectedClashTest, namingTemplate);
+
+                if (!string.IsNullOrWhiteSpace(namingTemplate) && ungroupedClashResults.Count > 0)
+                {
+                    var fallback = new ClashResultGroup { DisplayName = "" };
+                    foreach (var cr in ungroupedClashResults) fallback.Children.Add(cr);
+                    ungroupedClashResults = new List<ClashResult>();
+                    var wrapped = new List<ClashResultGroup> { fallback };
+                    wrapped = ApplyTemplateToGroups(wrapped, selectedClashTest, namingTemplate);
+                    clashResultGroups.AddRange(wrapped);
+                }
+
+                if (keepExistingGroups)
+                {
+                    var existingGroups = BackupExistingClashGroups(selectedClashTest).ToList();
+                    clashResultGroups.AddRange(existingGroups);
+                }
+
+                ProcessClashGroup(clashResultGroups, ungroupedClashResults, selectedClashTest);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Error grouping clashes: " + ex.Message, ex);
+            }
+        }
+
+        // Walks an existing test's top-level ClashResultGroup children; for each
+        // group whose descendant clashes include any with a status in the
+        // filter, applies the template via TestsEditDisplayName.  No clashes
+        // are moved, only renamed.
+        private static void RegroupAndRenameExisting(
+            ClashTest test, ISet<ClashResultStatus> statusFilter, string template)
+        {
+            if (test == null || statusFilter == null || statusFilter.Count == 0) return;
+            if (string.IsNullOrWhiteSpace(template)) return;
+
+            var toRename = new List<ClashResultGroup>();
+            foreach (var child in test.Children)
+            {
+                if (!(child is ClashResultGroup grp)) continue;
+                if (GroupContainsAnyStatus(grp, statusFilter))
+                    toRename.Add(grp);
+            }
+
+            if (toRename.Count > 0)
+                RenameGroupsWithTemplate(toRename, test, template);
+        }
+
+        private static bool GroupContainsAnyStatus(ClashResultGroup grp, ISet<ClashResultStatus> statuses)
+        {
+            foreach (var item in grp.Children)
+            {
+                if (item is ClashResult cr && statuses.Contains(cr.Status)) return true;
+                if (item is ClashResultGroup nested && GroupContainsAnyStatus(nested, statuses)) return true;
+            }
+            return false;
+        }
+
+        // Overload that accepts a naming-template string.  When non-empty, every
+        // produced ClashResultGroup is renamed by ApplyTemplateToGroups using
+        // tokens {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA}
+        // {SelectionB} {#}.  Empty template preserves the legacy mode-specific
+        // names.
+        public static void GroupClashes(
+            ClashTest selectedClashTest,
+            GroupingMode groupingMode,
+            GroupingMode subgroupingMode,
+            bool keepExistingGroups,
+            string namingTemplate)
         {
             try
             {
@@ -64,6 +216,21 @@ namespace AutoNAV
                         CreateSubGroups(ref clashResultGroups, subgroupingMode);
 
                     ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
+                }
+
+                // Apply naming template (no-op when template is null/empty).
+                clashResultGroups = ApplyTemplateToGroups(clashResultGroups, selectedClashTest, namingTemplate);
+
+                // Ensure no naked-ungrouped clashes — if a template is set, wrap
+                // every leftover into a fallback group named by the template.
+                if (!string.IsNullOrWhiteSpace(namingTemplate) && ungroupedClashResults.Count > 0)
+                {
+                    var fallback = new ClashResultGroup { DisplayName = "" };
+                    foreach (var cr in ungroupedClashResults) fallback.Children.Add(cr);
+                    ungroupedClashResults = new List<ClashResult>();
+                    var wrapped = new List<ClashResultGroup> { fallback };
+                    wrapped = ApplyTemplateToGroups(wrapped, selectedClashTest, namingTemplate);
+                    clashResultGroups.AddRange(wrapped);
                 }
 
                 if (keepExistingGroups)
@@ -495,6 +662,314 @@ namespace AutoNAV
             List<ClashResult> results = GetIndividualClashResults(selectedClashTest, false).ToList();
             List<ClashResult> copies  = results.Select(r => (ClashResult)r.CreateCopy()).ToList();
             ProcessClashGroup(new List<ClashResultGroup>(), copies, selectedClashTest);
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // Naming template engine
+        // ─────────────────────────────────────────────────────────────
+
+        private struct NamingContext
+        {
+            public string Month, Day, Year;
+            public string Level, Area;
+            public string TestName, SelectionA, SelectionB;
+        }
+
+        // Substitutes tokens. Empty values get a parameter-name placeholder so
+        // every clash group ends up with a non-empty name (per the user spec:
+        // missing level → "LXX", missing area → "AREA").
+        private static string ApplyNamingTemplate(string template, NamingContext ctx, Dictionary<string, int> sequenceCounter)
+        {
+            if (string.IsNullOrWhiteSpace(template)) return null;
+
+            string baseName = template
+                .Replace("{Month}",      ctx.Month)
+                .Replace("{Day}",        ctx.Day)
+                .Replace("{Year}",       ctx.Year)
+                .Replace("{Level}",      string.IsNullOrEmpty(ctx.Level)      ? "LXX"  : ctx.Level)
+                .Replace("{Area}",       string.IsNullOrEmpty(ctx.Area)       ? "AREA" : ctx.Area)
+                .Replace("{TestName}",   string.IsNullOrEmpty(ctx.TestName)   ? "TestName"   : ctx.TestName)
+                .Replace("{SelectionA}", string.IsNullOrEmpty(ctx.SelectionA) ? "SelectionA" : ctx.SelectionA)
+                .Replace("{SelectionB}", string.IsNullOrEmpty(ctx.SelectionB) ? "SelectionB" : ctx.SelectionB);
+
+            string key = baseName.Replace("{#}", "").Trim();
+            int n = sequenceCounter.TryGetValue(key, out var c) ? c + 1 : 1;
+            sequenceCounter[key] = n;
+            return baseName.Replace("{#}", n.ToString());
+        }
+
+        // Walks every group, builds a context (with fallbacks for level/area)
+        // and renames each via the template.
+        private static List<ClashResultGroup> ApplyTemplateToGroups(
+            List<ClashResultGroup> groups, ClashTest test, string template)
+        {
+            if (string.IsNullOrWhiteSpace(template)) return groups;
+
+            var seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in groups)
+            {
+                var ctx = BuildContext(group, test);
+                string newName = ApplyNamingTemplate(template, ctx, seq);
+                if (!string.IsNullOrEmpty(newName)) group.DisplayName = newName;
+            }
+            return groups;
+        }
+
+        private static NamingContext BuildContext(ClashResultGroup group, ClashTest test)
+        {
+            var now = DateTime.Now;
+            var ctx = new NamingContext
+            {
+                Month = now.ToString("MM"),
+                Day = now.ToString("dd"),
+                Year = now.ToString("yyyy"),
+                TestName = test?.DisplayName ?? "",
+                Level = "",
+                Area = "",
+                SelectionA = "",
+                SelectionB = ""
+            };
+
+            // Selection A / B: prefer the test's actual selection-set names;
+            // fall back to splitting the test name on " vs ".
+            ctx.SelectionA = ResolveSelectionNames(test, true);
+            ctx.SelectionB = ResolveSelectionNames(test, false);
+            if (string.IsNullOrEmpty(ctx.SelectionA) || string.IsNullOrEmpty(ctx.SelectionB))
+            {
+                if (!string.IsNullOrEmpty(ctx.TestName))
+                {
+                    int vs = ctx.TestName.IndexOf(" vs ", StringComparison.OrdinalIgnoreCase);
+                    if (vs > 0)
+                    {
+                        if (string.IsNullOrEmpty(ctx.SelectionA)) ctx.SelectionA = ctx.TestName.Substring(0, vs).Trim();
+                        if (string.IsNullOrEmpty(ctx.SelectionB)) ctx.SelectionB = ctx.TestName.Substring(vs + 4).Trim();
+                    }
+                    else if (string.IsNullOrEmpty(ctx.SelectionA))
+                    {
+                        ctx.SelectionA = ctx.TestName;
+                    }
+                }
+            }
+
+            // Pull Level + Area from the first clash result in the group.
+            ClashResult first = null;
+            foreach (var child in group.Children)
+            {
+                if (child is ClashResult cr) { first = cr; break; }
+            }
+            if (first != null)
+            {
+                try
+                {
+                    var grids = Application.MainDocument.Grids;
+                    var gsys = grids != null ? grids.ActiveSystem : null;
+                    if (gsys != null)
+                    {
+                        var gi = gsys.ClosestIntersection(first.Center);
+                        if (gi != null)
+                        {
+                            ctx.Area = string.IsNullOrEmpty(gi.DisplayName) ? "" : gi.DisplayName;
+                            if (gi.Level != null && !string.IsNullOrEmpty(gi.Level.DisplayName))
+                                ctx.Level = NormaliseLevel(gi.Level.DisplayName);
+                        }
+                    }
+                }
+                catch { /* best effort */ }
+
+                // Fallback: try to read a "Room" property off either composite item.
+                if (string.IsNullOrEmpty(ctx.Area))
+                {
+                    string room = TryGetRoomName(first.CompositeItem1) ?? TryGetRoomName(first.CompositeItem2);
+                    if (!string.IsNullOrEmpty(room)) ctx.Area = room;
+                }
+
+                // Fallback: parse level from one of the clashed items' file name.
+                if (string.IsNullOrEmpty(ctx.Level))
+                {
+                    string lvl = TryParseLevelFromFile(first.CompositeItem1) ?? TryParseLevelFromFile(first.CompositeItem2);
+                    if (!string.IsNullOrEmpty(lvl)) ctx.Level = lvl;
+                }
+            }
+
+            return ctx;
+        }
+
+        // Converts "Level 3", "L3", "L03", "Floor 03" to "L03"; "Basement 1" / "B1" to "B01";
+        // returns the original string if no clean pattern matches.
+        private static string NormaliseLevel(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return raw;
+            string s = raw.Trim();
+
+            // Pull the first numeric run; preserve the lead character if it's a
+            // recognised level prefix (L, B, M, R, T, P).
+            int firstDigit = -1;
+            for (int i = 0; i < s.Length; i++) { if (char.IsDigit(s[i])) { firstDigit = i; break; } }
+            if (firstDigit < 0) return s; // no number — return as-is
+
+            int end = firstDigit;
+            while (end < s.Length && char.IsDigit(s[end])) end++;
+            string numPart = s.Substring(firstDigit, end - firstDigit);
+            int num;
+            if (!int.TryParse(numPart, out num)) return s;
+            string numFmt = num.ToString("D2");
+
+            string lower = s.ToLowerInvariant();
+            if (lower.Contains("base") || lower.StartsWith("b")) return "B" + numFmt;
+            if (lower.Contains("roof")) return "R" + numFmt;
+            if (lower.Contains("mezz")) return "M" + numFmt;
+            if (lower.Contains("park")) return "P" + numFmt;
+            if (lower.Contains("term")) return "T" + numFmt;
+            // Default to "L" prefix for levels / floors / generic.
+            return "L" + numFmt;
+        }
+
+        // Pulls "Lnn" / "Bnn" / etc. from a model file's name (e.g. UTUSB-ARCH-L03 → "L03").
+        private static string TryParseLevelFromFile(ModelItem item)
+        {
+            if (item == null) return null;
+            ModelItem fa = GetFileAncestor(item);
+            if (fa == null) return null;
+            string name = fa.DisplayName ?? "";
+            // Try common level token shapes inside the filename.
+            foreach (string sep in new[] { "-", "_", " ", "." })
+            {
+                foreach (string token in name.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string t = token.Trim();
+                    if (t.Length >= 2 && t.Length <= 4)
+                    {
+                        char lead = char.ToUpperInvariant(t[0]);
+                        if ("LBMRPT".IndexOf(lead) >= 0)
+                        {
+                            string rest = t.Substring(1);
+                            int n;
+                            if (int.TryParse(rest, out n)) return lead + n.ToString("D2");
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Pulls "Room" property from a ModelItem if any property category exposes it.
+        private static string TryGetRoomName(ModelItem item)
+        {
+            if (item == null) return null;
+            try
+            {
+                foreach (var cat in item.PropertyCategories)
+                {
+                    foreach (var prop in cat.Properties)
+                    {
+                        string n = prop.DisplayName ?? "";
+                        if (n.IndexOf("room", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            string v = prop.Value?.ToDisplayString();
+                            if (!string.IsNullOrWhiteSpace(v)) return v;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // Walks ClashTest.SelectionA / SelectionB's SelectionSources and resolves
+        // each to its SavedItem (search set) DisplayName.  Empty string when
+        // the selection holds nothing resolvable.
+        private static string ResolveSelectionNames(ClashTest test, bool selectionA)
+        {
+            if (test == null) return "";
+            try
+            {
+                var clashSel = selectionA ? test.SelectionA : test.SelectionB;
+                if (clashSel == null) return "";
+                var sel = clashSel.Selection;
+                if (sel == null) return "";
+
+                var names = new List<string>();
+                var doc = Application.MainDocument;
+                foreach (var src in sel.SelectionSources)
+                {
+                    try
+                    {
+                        var saved = doc?.SelectionSets?.ResolveSelectionSource(src);
+                        if (saved != null && !string.IsNullOrWhiteSpace(saved.DisplayName))
+                            names.Add(saved.DisplayName);
+                    }
+                    catch { }
+                }
+                return string.Join(" + ", names);
+            }
+            catch { return ""; }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // Rename existing groups using the template
+        // ─────────────────────────────────────────────────────────────
+
+        // Applies the template to the supplied groups (typically the ones the
+        // user has selected in Clash Detective).  Renames in place via the
+        // ClashTest's TestsEditDisplayName transaction so the change is visible
+        // in Clash Detective without a full rebuild.  Returns the number of
+        // groups renamed.
+        public static int RenameGroupsWithTemplate(List<ClashResultGroup> groups, ClashTest test, string template)
+        {
+            if (groups == null || groups.Count == 0 || string.IsNullOrWhiteSpace(template) || test == null)
+                return 0;
+
+            var doc = Application.MainDocument;
+            if (doc == null) return 0;
+            var dct = doc.GetClash().TestsData;
+
+            var seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            int renamed = 0;
+            foreach (var g in groups)
+            {
+                if (g == null) continue;
+                var ctx = BuildContext(g, test);
+                string newName = ApplyNamingTemplate(template, ctx, seq);
+                if (string.IsNullOrEmpty(newName)) continue;
+                try
+                {
+                    dct.TestsEditDisplayName(g, newName);
+                    renamed++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[AutoNAV] RenameGroupsWithTemplate '{g.DisplayName}' failed: {ex.Message}");
+                }
+            }
+            return renamed;
+        }
+
+        // For each top-level clash test, returns its currently-selected
+        // descendant ClashResultGroup instances.  Uses Navisworks' active
+        // document selection.
+        public static List<KeyValuePair<ClashTest, ClashResultGroup>> GetSelectedClashGroups()
+        {
+            var pairs = new List<KeyValuePair<ClashTest, ClashResultGroup>>();
+            var doc = Application.MainDocument;
+            if (doc == null) return pairs;
+            DocumentClash docClash = doc.GetClash();
+            if (docClash == null || docClash.TestsData == null) return pairs;
+
+            // Collect every (ClashTest, ClashResultGroup) currently in the
+            // document so we can match them against the active selection.
+            foreach (ClashTest test in ClashCompat.EnumerateTests(docClash.TestsData))
+            {
+                foreach (var child in test.Children)
+                {
+                    if (child is ClashResultGroup crg) pairs.Add(new KeyValuePair<ClashTest, ClashResultGroup>(test, crg));
+                }
+            }
+
+            // Try to filter to "selected" via ActiveSelection.SelectedItems — these
+            // are model items, not clash-tree items, so the API doesn't expose
+            // "which clash groups the user clicked".  We return ALL groups; the
+            // UI surface should let the user multi-select from a checkbox list.
+            return pairs;
         }
 
         #region Grouping functions

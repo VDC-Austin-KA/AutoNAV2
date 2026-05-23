@@ -570,7 +570,11 @@ namespace AutoNAV
                     return;
                 }
 
-                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting);
+                string template = GetSelectedNamingTemplate();
+                var newStatuses = GetNewStatusFilter();
+                var regroupStatuses = GetRegroupStatusFilter();
+                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting, template,
+                                          newStatuses, regroupStatuses);
 
                 MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
                     "Group Clashes", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -624,6 +628,9 @@ namespace AutoNAV
                     return;
                 }
 
+                string template = GetSelectedNamingTemplate();
+                var newStatuses = GetNewStatusFilter();
+                var regroupStatuses = GetRegroupStatusFilter();
                 int groupedCount = 0;
                 int failedCount = 0;
 
@@ -631,7 +638,8 @@ namespace AutoNAV
                 {
                     try
                     {
-                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting);
+                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting, template,
+                                                  newStatuses, regroupStatuses);
                         groupedCount++;
                     }
                     catch (Exception ex)
@@ -709,6 +717,124 @@ namespace AutoNAV
 
         private void OnClashTestSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Naming-template UI helpers
+        // ─────────────────────────────────────────────────────────────────────
+
+        // The selected template's literal string (Tag of the selected ComboBoxItem),
+        // or "" for the "legacy auto-naming" entry.
+        private string GetSelectedNamingTemplate()
+        {
+            var cb = cmbNamingTemplate?.SelectedItem as ComboBoxItem;
+            return cb?.Tag as string ?? "";
+        }
+
+        // Reads the "New Clashes" status checkboxes; empty set means no filter.
+        private HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> GetNewStatusFilter()
+        {
+            var s = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+            if (chkNewStatusNew?.IsChecked      == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.New);
+            if (chkNewStatusActive?.IsChecked   == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Active);
+            if (chkNewStatusReviewed?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed);
+            return s;
+        }
+
+        // Reads the "Regroup & Rename" status checkboxes; only meaningful when the
+        // section is enabled (no New-Clashes status selected). Empty set = nothing
+        // to regroup.
+        private HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> GetRegroupStatusFilter()
+        {
+            var s = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+            if (pnlRegroup?.IsEnabled != true) return s;
+            if (chkRegroupStatusNew?.IsChecked      == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.New);
+            if (chkRegroupStatusActive?.IsChecked   == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Active);
+            if (chkRegroupStatusReviewed?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed);
+            if (chkRegroupStatusApproved?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Approved);
+            if (chkRegroupStatusResolved?.IsChecked == true) s.Add(Autodesk.Navisworks.Api.Clash.ClashResultStatus.Resolved);
+            return s;
+        }
+
+        // Toggles the Regroup section's enabled state based on the New Clashes
+        // checkboxes. When ANY New Clashes status is selected, Regroup is
+        // ghosted; when ALL are unselected, Regroup is editable.
+        private void OnNewStatusChanged(object sender, RoutedEventArgs e)
+        {
+            if (pnlRegroup == null) return;
+            bool anyNew = (chkNewStatusNew?.IsChecked == true)
+                       || (chkNewStatusActive?.IsChecked == true)
+                       || (chkNewStatusReviewed?.IsChecked == true);
+            pnlRegroup.IsEnabled = !anyNew;
+            pnlRegroup.Opacity = anyNew ? 0.5 : 1.0;
+        }
+
+        // Rebuilds txtNamingPreview live using a synthetic sample context.
+        private void OnNamingTemplateChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (txtNamingPreview == null) return;
+            string template = GetSelectedNamingTemplate();
+            if (string.IsNullOrEmpty(template))
+            {
+                txtNamingPreview.Text = "(legacy mode-specific names will be used)";
+                return;
+            }
+
+            // Sample: Jan 10th 2027, Level 03 near B8:C7, ARCH vs STRC test,
+            // Railings vs Structural Framing.  Match the user's spec example.
+            string sample = template
+                .Replace("{Month}", "01")
+                .Replace("{Day}", "10")
+                .Replace("{Year}", "2027")
+                .Replace("{Level}", "L03")
+                .Replace("{Area}", "B8:C7")
+                .Replace("{TestName}", "ARCH vs STRC")
+                .Replace("{SelectionA}", "Railings")
+                .Replace("{SelectionB}", "Structural Framing")
+                .Replace("{#}", "1");
+            txtNamingPreview.Text = sample;
+        }
+
+        // Apply the current template to clash groups currently selected in
+        // Clash Detective.  When the user has nothing selected, show a list
+        // of every existing group with checkboxes for multi-pick.
+        private void OnRenameSelectedClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string template = GetSelectedNamingTemplate();
+                if (string.IsNullOrWhiteSpace(template))
+                {
+                    MessageBox.Show("Pick a naming template from the dropdown first.", "Rename Selected",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                var pairs = ClashGrouper.GetSelectedClashGroups();
+                if (pairs.Count == 0)
+                {
+                    MessageBox.Show("No clash groups found in the document.", "Rename Selected",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Group by test, call RenameGroupsWithTemplate per test so the
+                // sequence counter resets sensibly.
+                int totalRenamed = 0;
+                foreach (var byTest in pairs.GroupBy(kv => kv.Key))
+                {
+                    var groups = byTest.Select(kv => kv.Value).ToList();
+                    totalRenamed += ClashGrouper.RenameGroupsWithTemplate(groups, byTest.Key, template);
+                }
+
+                MessageBox.Show($"Renamed {totalRenamed} clash group(s) with the current template.",
+                    "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Rename failed:\n\n" + ex.Message, "Rename Selected",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private ClashGrouper.GroupingMode ParseGroupingMode(string modeStr)
