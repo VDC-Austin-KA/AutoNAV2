@@ -153,9 +153,8 @@ Foreground="#333333">
                                 <!-- Grouping Mode Selection -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <TextBlock Text="Primary Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <ComboBox Name="cmbGroupingMode" Width="220" Height="26" FontSize="11">
-                                        <ComboBoxItem Content="Walls and Floors (per discipline)" Tag="WallsAndFloors" IsSelected="True"/>
-                                        <ComboBoxItem Content="None" Tag="None"/>
+                                    <ComboBox Name="cmbGroupingMode" Width="180" Height="26" FontSize="11">
+                                        <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
                                         <ComboBoxItem Content="Level" Tag="Level"/>
                                         <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
                                         <ComboBoxItem Content="Selection A (First Element)" Tag="SelectionA"/>
@@ -170,6 +169,7 @@ Foreground="#333333">
                                         <ComboBoxItem Content="First Element" Tag="First"/>
                                         <ComboBoxItem Content="Last Element" Tag="Last"/>
                                         <ComboBoxItem Content="Last Unique Pair" Tag="LastUnique"/>
+                                        <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
                                     </ComboBox>
                                 </StackPanel>
                                 
@@ -190,36 +190,40 @@ Foreground="#333333">
                                     </ComboBox>
                                 </StackPanel>
                                 
-                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" IsChecked="True" Margin="0,0,0,10"/>
-
-                                <!-- GROUP NAMING TEMPLATE -->
-                                <TextBlock Text="Group Naming Template (optional):" FontSize="11" FontWeight="SemiBold" Margin="0,4,0,4"/>
-                                <TextBox Name="txtGroupNameTemplate" Height="26" FontSize="11"
-                                         ToolTip="Available tokens: {Month} {Day} {Year} {Grid} {Level} {Test Name} {Selection A} {Selection B} {#}"
-                                         Margin="0,0,0,4"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,4">
-                                    Tokens: {Month} {Day} {Year} {Grid} {Level} {Test Name} {Selection A} {Selection B} {#}
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,10">
-                                    Example: "{Month}/{Day}_{Level}_{Grid}-{Test Name}-{Selection A} vs {Selection B} {#}"
-                                </TextBlock>
-
-                                <!-- MAX CLASHES PER GROUP -->
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="Max clashes per group (1–200):" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <TextBox Name="txtMaxClashesPerGroup" Text="15" Width="60" Height="26" FontSize="11"/>
-                                </StackPanel>
-
+                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" Margin="0,0,0,10"/>
+                                
                                 <!-- CLASH TEST SELECTION -->
                                 <TextBlock Text="3. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
-
+                                
                                 <!-- GROUP BUTTONS -->
                                 <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
                                     <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
                                     <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                                     <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 6 -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 6: Group Clashes by Walls / Floors" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
+                                    For every clash test, groups results where either clashing element
+                                    belongs to a Walls or Floors search set (from 2. CLASH SETS).
+                                    All remaining clashes are left ungrouped — ready for Sherlock Distill.
+                                </TextBlock>
+                                <TextBlock Text="Prerequisites: Functions 1–5 complete, clash tests run." FontSize="10" Foreground="#666666" FontStyle="Italic" Margin="0,0,0,12"/>
+                                <Button Name="btnFunction6"
+                                        Content="Group All Tests — Walls / Floors"
+                                        Click="OnFunction6Click"
+                                        Padding="10,8"
+                                        Background="#107C10"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Width="240"
+                                        HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
 
