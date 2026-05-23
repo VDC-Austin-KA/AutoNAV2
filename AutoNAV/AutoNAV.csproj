@@ -143,6 +143,7 @@
     <Compile Include="ClashResultGrouper.cs" />
     <Compile Include="ClashGrouper.cs" />
     <Compile Include="ClashCompat.cs" />
+    <Compile Include="UnknownDisciplineDialog.cs" />
   </ItemGroup>
   <!-- XAML Pages -->
   <ItemGroup>

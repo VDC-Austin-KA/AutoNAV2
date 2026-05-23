@@ -135,21 +135,43 @@ Foreground="#333333">
                             </StackPanel>
                         </Border>
 
-                        <!-- FUNCTION 5 -->
+                        <!-- FUNCTION 5 (Walls / Floors — was Function 6) -->
                         <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
                             <StackPanel Margin="15">
-                                <TextBlock Text="Function 5: Run Tests &amp; Group Clashes" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="Function 5: Group Clashes by Walls / Floors" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
+                                    For every clash test, groups results where either clashing element
+                                    belongs to a Walls or Floors search set (from 2. CLASH SETS).
+                                    All remaining clashes are left ungrouped — ready for Sherlock Distill.
+                                </TextBlock>
+                                <TextBlock Text="Prerequisites: Functions 1–4 complete, clash tests run." FontSize="10" Foreground="#666666" FontStyle="Italic" Margin="0,0,0,12"/>
+                                <Button Name="btnFunction6"
+                                        Content="Group All Tests — Walls / Floors"
+                                        Click="OnFunction6Click"
+                                        Padding="10,8"
+                                        Background="#107C10"
+                                        Foreground="White"
+                                        FontWeight="Bold"
+                                        Width="240"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 6 (Run + Group Clashes — was Function 5) -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 6: Run Tests &amp; Group Clashes" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
                                 <TextBlock Text="Run all clash tests and optionally group results by various criteria." FontSize="11" Foreground="#888888" Margin="0,0,0,12" TextWrapping="Wrap"/>
-                                
+
                                 <!-- UPDATE ALL TESTS SECTION -->
                                 <TextBlock Text="1. Run All Clash Tests:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <Button Name="btnUpdateAllTests" Content="Update All Tests (Run Simultaneously)" Click="OnUpdateAllTestsClick" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="250" HorizontalAlignment="Left" Margin="0,0,0,15"/>
                                 <TextBlock Text="Runs all clash tests simultaneously in the background." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
-                                
+
                                 <!-- GROUPING OPTIONS SECTION -->
                                 <TextBlock Text="2. Group Clash Results:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <TextBlock Text="Select a grouping method and click 'Group Clashes' to organize results." FontSize="10" Foreground="#666666" Margin="0,0,0,10" TextWrapping="Wrap"/>
-                                
+
                                 <!-- Grouping Mode Selection -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <TextBlock Text="Primary Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -172,7 +194,7 @@ Foreground="#333333">
                                         <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
                                     </ComboBox>
                                 </StackPanel>
-                                
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <TextBlock Text="Sub-Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <ComboBox Name="cmbSubGroupingMode" Width="180" Height="26" FontSize="11">
@@ -189,41 +211,45 @@ Foreground="#333333">
                                         <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
                                     </ComboBox>
                                 </StackPanel>
-                                
+
                                 <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" Margin="0,0,0,10"/>
-                                
+
                                 <!-- CLASH TEST SELECTION -->
                                 <TextBlock Text="3. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
-                                
+
+                                <!-- NAMING TEMPLATE -->
+                                <TextBlock Text="4. Clash Group Naming Template:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox Name="cmbNamingTemplate" Width="600" Height="26" FontSize="11" Margin="0,0,0,4"
+                                          SelectionChanged="OnNamingTemplateChanged">
+                                    <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  IsSelected="True"/>
+                                    <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                    <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
+                                                  Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                    <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                    <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
+                                </ComboBox>
+                                <TextBlock Text="Preview:" FontSize="9" Foreground="#666666" Margin="0,2,0,2"/>
+                                <TextBlock Name="txtNamingPreview" Text="" FontSize="10" Foreground="#0078D4" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,10">
+                                    Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.
+                                    Missing data falls back to placeholders (LXX, AREA) so every clash is named.
+                                </TextBlock>
+
                                 <!-- GROUP BUTTONS -->
                                 <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
                                     <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
                                     <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                                     <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                                 </StackPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- FUNCTION 6 -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 6: Group Clashes by Walls / Floors" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
-                                    For every clash test, groups results where either clashing element
-                                    belongs to a Walls or Floors search set (from 2. CLASH SETS).
-                                    All remaining clashes are left ungrouped — ready for Sherlock Distill.
-                                </TextBlock>
-                                <TextBlock Text="Prerequisites: Functions 1–5 complete, clash tests run." FontSize="10" Foreground="#666666" FontStyle="Italic" Margin="0,0,0,12"/>
-                                <Button Name="btnFunction6"
-                                        Content="Group All Tests — Walls / Floors"
-                                        Click="OnFunction6Click"
-                                        Padding="10,8"
-                                        Background="#107C10"
-                                        Foreground="White"
-                                        FontWeight="Bold"
-                                        Width="240"
-                                        HorizontalAlignment="Left"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"
+                                            ToolTip="Apply the current naming template to clash groups currently selected in Clash Detective. With nothing selected, shows a picker."/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 

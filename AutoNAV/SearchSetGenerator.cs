@@ -78,14 +78,59 @@ namespace AutoNAV
                         allFileNames.Add(noExt);
                 }
 
-                // Compute the minimal unique CONTAINS patterns for this set of files
-                List<string> patterns = ComputeDisciplinePatterns(allFileNames);
-
-                if (patterns.Count == 0)
+                // Classify every loaded file via the discipline dictionary, with
+                // shortest-unique-discriminator as the per-file fallback.
+                var picks = ClassifyFiles(allFileNames);
+                if (picks.Count == 0)
                 {
                     MessageBox.Show("Could not derive discipline patterns from the loaded model names.",
                         "Function 1", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
+                }
+
+                // If any file landed on the fallback path, offer the user a
+                // chance to override its discipline before search sets are
+                // created.
+                var unresolved = picks.Where(p => !p.FromDictionary).ToList();
+                if (unresolved.Count > 0)
+                {
+                    var dlg = new UnknownDisciplineDialog(unresolved, DisciplineDictionary);
+                    if (System.Windows.Application.Current?.MainWindow != null)
+                        dlg.Owner = System.Windows.Application.Current.MainWindow;
+                    dlg.ShowDialog();
+
+                    // Merge user choices back into the pick list.
+                    char sep = DetectSeparator(string.Join("|", allFileNames));
+                    foreach (var chosen in dlg.Choices)
+                    {
+                        // Match by source file; replace the pick in-place.
+                        for (int i = 0; i < picks.Count; i++)
+                        {
+                            if (string.Equals(picks[i].SourceFile, chosen.Key, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string token = chosen.Value;
+                                if (!string.IsNullOrWhiteSpace(token))
+                                {
+                                    var p = picks[i];
+                                    p.DisplayName = token;
+                                    p.Pattern = sep + token + sep;
+                                    p.FromDictionary = true;
+                                    p.CanonicalName = TryMatchDiscipline(token, out _, out string canon) ? canon : token;
+                                    picks[i] = p;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Collapse to unique patterns (multiple files can share one
+                // discipline → one search set).
+                var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var patterns = new List<string>();
+                foreach (var p in picks)
+                {
+                    if (seenPatterns.Add(p.Pattern)) patterns.Add(p.Pattern);
                 }
 
                 DocumentSelectionSets selSets = doc.SelectionSets;
@@ -473,117 +518,227 @@ namespace AutoNAV
         //       b) does NOT appear in files of any other group.
         //     If no single segment qualifies, try adjacent segment pairs,
         //     then fall back to full discipline segment string.
-        internal static List<string> ComputeDisciplinePatterns(List<string> fileNamesNoExt)
+        // ─────────────────────────────────────────────────────────────────────
+        // Discipline dictionary — US National CAD Standard codes (1-char) plus
+        // common BIM filename variants seen in the wild.  Keys are canonical
+        // discipline names; values are the recognised tokens (case-insensitive).
+        //
+        // Match priority is first-by-longest then by dictionary order, so 4-char
+        // tokens (ARCH) win over 1-char tokens (A) when both appear.
+        // ─────────────────────────────────────────────────────────────────────
+        internal static readonly Dictionary<string, string[]> DisciplineDictionary =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Architectural",       new[] { "ARCHI", "ARCH", "ARCS", "ARC", "AR", "A" } },
+                { "Structural",          new[] { "STRUCT", "STRC", "STRU", "STR", "ST", "S" } },
+                { "Mechanical",          new[] { "HVAC", "MECH", "MEC", "ME", "M" } },
+                { "Electrical",          new[] { "ELEX", "ELEC", "ELC", "EL", "E" } },
+                { "Plumbing",            new[] { "PLUMB", "PLBG", "PLM", "PL", "P" } },
+                { "Fire Protection",     new[] { "SPRINK", "FIRE", "SPRK", "FP", "SP", "F" } },
+                { "Civil",               new[] { "CIVIL", "CIV", "CV", "C" } },
+                { "Landscape",           new[] { "LAND", "LDS", "LS", "L" } },
+                { "Telecommunications",  new[] { "TELE", "TEL", "COMM", "DATA", "IT", "T" } },
+                { "Interiors",           new[] { "INTERIOR", "INT", "I" } },
+                { "Equipment",           new[] { "EQUIP", "EQ", "Q" } },
+                { "Hazardous",           new[] { "HAZ", "HZ", "H" } },
+                { "Geotechnical",        new[] { "GEO", "GE", "B" } },
+                { "Process",             new[] { "PROC", "PR", "D" } },
+                { "Distributed Energy",  new[] { "DE", "W" } },
+                { "Survey",              new[] { "SURV", "SV", "V" } },
+                { "Resource",            new[] { "R" } },
+                { "Other",               new[] { "OT", "X" } },
+                { "Contractor",          new[] { "SHOP", "SH", "Z" } },
+                { "Operations",          new[] { "OP", "O" } },
+                { "Security",            new[] { "SECURITY", "SEC" } },
+                { "Vertical Transport",  new[] { "ELEV", "VT" } },
+                { "Roofing",             new[] { "ROOF", "RF" } },
+                { "FF&E",                new[] { "FFE", "FF" } },
+                { "Audio/Visual",        new[] { "AV" } },
+                { "Acoustical",          new[] { "ACOUS", "AC" } },
+                { "Demolition",          new[] { "DEMO", "DM" } },
+            };
+
+        // Pre-flattened (token → canonical name) lookup, longest-first.
+        private static readonly KeyValuePair<string, string>[] DisciplineLookup =
+            DisciplineDictionary
+                .SelectMany(kv => kv.Value.Select(code => new KeyValuePair<string, string>(code, kv.Key)))
+                .OrderByDescending(kv => kv.Key.Length)
+                .ToArray();
+
+        // Look up a token in the dictionary; returns the matching dictionary token
+        // (original casing) and canonical name, or (null, null) for no hit.
+        internal static bool TryMatchDiscipline(string token, out string matchedCode, out string canonicalName)
         {
+            matchedCode = null;
+            canonicalName = null;
+            if (string.IsNullOrEmpty(token)) return false;
+            foreach (var kv in DisciplineLookup)
+            {
+                if (string.Equals(kv.Key, token, StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedCode = kv.Key;
+                    canonicalName = kv.Value;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Per-file shortest-unique-subsequence pick used as the fallback when the
+        // discipline dictionary doesn't hit.  Returns (pattern, displayName).
+        private static (string Pattern, string DisplayName) PickFallbackDiscriminator(
+            string file, List<string> candidates, List<string> allFiles, char sep)
+        {
+            var tokens = candidates;
+            for (int len = 1; len <= tokens.Count; len++)
+            {
+                for (int start = 0; start + len <= tokens.Count; start++)
+                {
+                    var slice = tokens.GetRange(start, len);
+                    string joined = string.Join(sep.ToString(), slice);
+                    string candidate = sep + joined + sep;
+
+                    if (file.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                    bool inOther = false;
+                    foreach (string g in allFiles)
+                    {
+                        if (string.Equals(g, file, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (g.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0)
+                        { inOther = true; break; }
+                    }
+                    if (inOther) continue;
+
+                    return (candidate, joined);
+                }
+            }
+
+            // Full candidate-token string fallback
+            if (tokens.Count > 0)
+            {
+                string joined = string.Join(sep.ToString(), tokens);
+                return (sep + joined + sep, joined);
+            }
+            // Last resort
+            return (file, file);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Per-file discipline classifier.
+        //
+        // For every loaded file:
+        //   1. Split the filename and remove level codes + tokens shared by
+        //      every loaded file (project prefix etc.) so we get the per-file
+        //      "candidates" pool.
+        //   2. Walk the candidates in original order looking for any that hits
+        //      the discipline dictionary.  First hit wins and becomes the
+        //      search-set name + Navisworks search pattern.
+        //   3. If no dictionary hit, fall back to the shortest contiguous
+        //      subsequence of candidates that is unique across all loaded
+        //      filenames (when wrapped in separators).
+        //
+        // Returns the same per-file pick struct used by both
+        // ComputeDisciplinePatterns and ComputeDisciplinePatternsDetailed.
+        // ─────────────────────────────────────────────────────────────────────
+        public struct DisciplinePick
+        {
+            public string Pattern;          // wrapped in separators, e.g. "-ARCH-"
+            public string DisplayName;      // unwrapped, e.g. "ARCH"
+            public string SourceFile;       // the filename it came from
+            public bool FromDictionary;     // true if step 2 hit, false for fallback
+            public string CanonicalName;    // "Architectural" etc. when FromDictionary
+        }
+
+        internal static List<DisciplinePick> ClassifyFiles(List<string> fileNamesNoExt)
+        {
+            var picks = new List<DisciplinePick>();
             var allFiles = fileNamesNoExt
                 .Where(f => !string.IsNullOrWhiteSpace(f))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            if (allFiles.Count == 0) return picks;
 
-            if (allFiles.Count == 0) return new List<string>();
-
-            // Detect separator: whichever of '-' or '_' appears more across all names
             char sep = DetectSeparator(string.Join("|", allFiles));
 
-            // Split each file into segments
+            // Split + compute per-file candidates (no level codes, no
+            // universally-shared tokens).
             var fileSegments = allFiles.ToDictionary(
                 f => f,
-                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToArray());
+                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
-            // Compute discipline segments for each file (skip prefix, skip level codes)
-            var fileDisciplineSegs = allFiles.ToDictionary(
-                f => f,
-                f =>
-                {
-                    var segs = fileSegments[f];
-                    return segs
-                        .Skip(1)                          // drop project prefix
-                        .Where(s => !IsLevelCode(s))      // drop level codes
-                        .ToList();
-                });
-
-            // Group files by their FULL discipline segment string
-            var groups = fileDisciplineSegs
-                .GroupBy(
-                    kv => string.Join(sep.ToString(), kv.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(kv => kv.Key).ToList());
-
-            var patterns = new List<string>();
-
-            foreach (var group in groups)
+            HashSet<string> universal = null;
+            foreach (var segs in fileSegments.Values)
             {
-                List<string> groupFiles = group.Value;
-                string fullDisciplineString = group.Key;
-                string repFile = groupFiles[0];
-                List<string> discSegs = fileDisciplineSegs[repFile];
-                List<string> otherFiles = allFiles.Except(groupFiles).ToList();
+                var thisSet = new HashSet<string>(segs, StringComparer.OrdinalIgnoreCase);
+                if (universal == null) universal = thisSet;
+                else universal.IntersectWith(thisSet);
+            }
+            universal = universal ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                string bestPattern = null;
+            var candidates = fileSegments.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.Where(s => !IsLevelCode(s)).Where(s => !universal.Contains(s)).ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
-                // --- Try single segments, shortest first ---
-                foreach (string seg in discSegs.OrderBy(s => s.Length).ThenBy(s => s))
+            foreach (string file in allFiles)
+            {
+                var tokens = candidates[file];
+
+                // Stage 1: dictionary hit.  Walk candidates in original order;
+                // first token that matches a discipline wins.
+                string hitToken = null;
+                string hitCanonical = null;
+                foreach (string t in tokens)
                 {
-                    string candidate = sep + seg + sep;
-
-                    bool inAll = groupFiles.All(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inAll) continue;
-
-                    bool inOther = otherFiles.Any(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inOther) { bestPattern = candidate; break; }
-                }
-
-                // --- Try adjacent segment pairs ---
-                if (bestPattern == null)
-                {
-                    for (int i = 0; i < discSegs.Count - 1 && bestPattern == null; i++)
+                    if (TryMatchDiscipline(t, out string matched, out string canonical))
                     {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
+                        hitToken = matched;
+                        hitCanonical = canonical;
+                        break;
                     }
                 }
 
-                // --- Try triples for cases like TPC-DW ---
-                if (bestPattern == null && discSegs.Count >= 3)
+                if (hitToken != null)
                 {
-                    for (int i = 0; i < discSegs.Count - 2 && bestPattern == null; i++)
+                    picks.Add(new DisciplinePick
                     {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep + discSegs[i + 2] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
-                    }
+                        Pattern = sep + hitToken + sep,
+                        DisplayName = hitToken,
+                        SourceFile = file,
+                        FromDictionary = true,
+                        CanonicalName = hitCanonical,
+                    });
+                    continue;
                 }
 
-                // --- Fallback: full discipline segment string ---
-                if (bestPattern == null && discSegs.Count > 0)
-                    bestPattern = sep + fullDisciplineString + sep;
-
-                // Final fallback: use the filename itself (no wrapping)
-                if (bestPattern == null)
-                    bestPattern = repFile;
-
-                if (!string.IsNullOrEmpty(bestPattern))
-                    patterns.Add(bestPattern);
+                // Stage 2: per-file shortest unique discriminator fallback.
+                var fallback = PickFallbackDiscriminator(file, tokens, allFiles, sep);
+                picks.Add(new DisciplinePick
+                {
+                    Pattern = fallback.Pattern,
+                    DisplayName = fallback.DisplayName,
+                    SourceFile = file,
+                    FromDictionary = false,
+                    CanonicalName = null,
+                });
             }
 
-            return patterns;
+            return picks;
+        }
+
+        internal static List<string> ComputeDisciplinePatterns(List<string> fileNamesNoExt)
+        {
+            // De-dup patterns when two files would yield the same one (e.g. two
+            // architectural models in the same project both pick "ARCH").
+            var picks = ClassifyFiles(fileNamesNoExt);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<string>();
+            foreach (var p in picks)
+            {
+                if (seen.Add(p.Pattern)) result.Add(p.Pattern);
+            }
+            return result;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -673,96 +828,37 @@ namespace AutoNAV
 
         internal static List<DisciplinePatternResult> ComputeDisciplinePatternsDetailed(List<string> fileNamesNoExt)
         {
-            var allFiles = fileNamesNoExt
-                .Where(f => !string.IsNullOrWhiteSpace(f))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var results = new List<DisciplinePatternResult>();
-
-            if (allFiles.Count == 0) return results;
-
-            char sep = DetectSeparator(string.Join("|", allFiles));
-
-            var fileSegments = allFiles.ToDictionary(
-                f => f,
-                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToArray());
-
-            var fileDisciplineSegs = allFiles.ToDictionary(
-                f => f,
-                f =>
-                {
-                    var segs = fileSegments[f];
-                    return segs
-                        .Skip(1)
-                        .Where(s => !IsLevelCode(s))
-                        .ToList();
-                });
-
-            var groups = fileDisciplineSegs
-                .GroupBy(
-                    kv => string.Join(sep.ToString(), kv.Value),
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Select(kv => kv.Key).ToList());
-
-            foreach (var group in groups)
+            // De-dup by pattern; multiple files that map to the same discipline
+            // (e.g. two architectural models) share one result, with all source
+            // files in MatchedFiles.
+            var picks = ClassifyFiles(fileNamesNoExt);
+            var byPattern = new Dictionary<string, DisciplinePatternResult>(StringComparer.OrdinalIgnoreCase);
+            var ordered = new List<DisciplinePatternResult>();
+            foreach (var p in picks)
             {
-                List<string> groupFiles = group.Value;
-                string repFile = groupFiles[0];
-                List<string> discSegs = fileDisciplineSegs[repFile];
-                List<string> otherFiles = allFiles.Except(groupFiles).ToList();
-
-                string bestPattern = null;
-
-                foreach (string seg in discSegs.OrderBy(s => s.Length).ThenBy(s => s))
+                if (!byPattern.TryGetValue(p.Pattern, out var existing))
                 {
-                    string candidate = sep + seg + sep;
-
-                    bool inAll = groupFiles.All(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inAll) continue;
-
-                    bool inOther = otherFiles.Any(f =>
-                        f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                    if (!inOther) { bestPattern = candidate; break; }
-                }
-
-                if (bestPattern == null)
-                {
-                    for (int i = 0; i < discSegs.Count - 1 && bestPattern == null; i++)
+                    existing = new DisciplinePatternResult
                     {
-                        string candidate = sep + discSegs[i] + sep + discSegs[i + 1] + sep;
-
-                        bool inAll = groupFiles.All(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inAll) continue;
-
-                        bool inOther = otherFiles.Any(f =>
-                            f.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0);
-                        if (!inOther) bestPattern = candidate;
-                    }
+                        DisplayName = p.DisplayName,
+                        SearchPattern = p.Pattern,
+                        MatchedFiles = new List<string>(),
+                    };
+                    byPattern[p.Pattern] = existing;
+                    ordered.Add(existing);
                 }
-
-                if (bestPattern == null && discSegs.Count > 0)
-                    bestPattern = sep + string.Join(sep.ToString(), discSegs) + sep;
-
-                if (bestPattern == null)
-                    bestPattern = repFile;
-
-                if (!string.IsNullOrEmpty(bestPattern))
-                {
-                    results.Add(new DisciplinePatternResult
-                    {
-                        DisplayName = StripSeparatorWrapping(bestPattern),
-                        SearchPattern = bestPattern,
-                        MatchedFiles = groupFiles
-                    });
-                }
+                existing.MatchedFiles.Add(p.SourceFile);
             }
+            return ordered;
+        }
 
-            return results;
+        // Returns the picks whose classifier hit the fallback path (no dictionary
+        // match). UI uses this to drive the unknown-discipline picker dialog
+        // so the user can override the auto-derived name before search sets are
+        // created.
+        internal static List<DisciplinePick> GetUnclassifiedPicks(List<string> fileNamesNoExt)
+        {
+            return ClassifyFiles(fileNamesNoExt).Where(p => !p.FromDictionary).ToList();
         }
 
         public static void GenerateFunction1FromUserSelection(List<DisciplinePatternResult> patternGroups)
