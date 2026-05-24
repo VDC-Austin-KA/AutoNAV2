@@ -167,8 +167,30 @@ namespace AutoNAV
                 if (unresolved.Count > 0)
                 {
                     var dlg = new UnknownDisciplineDialog(unresolved, DisciplineDictionary);
-                    if (System.Windows.Application.Current?.MainWindow != null)
-                        dlg.Owner = System.Windows.Application.Current.MainWindow;
+                    // Best-effort owner: find a WPF window that's actually
+                    // visible.  Inside Navisworks Application.Current.MainWindow
+                    // can be a Win32-hosted Window that hasn't been WPF-shown,
+                    // and setting Owner to such a window throws InvalidOperationException
+                    // "Cannot set Owner property to a Window that has not been
+                    // shown previously."  Falling back to no owner still gives
+                    // a working modal dialog.
+                    try
+                    {
+                        Window owner = null;
+                        if (System.Windows.Application.Current != null)
+                        {
+                            foreach (Window w in System.Windows.Application.Current.Windows)
+                            {
+                                if (w != dlg && w.IsVisible)
+                                {
+                                    owner = w;
+                                    break;
+                                }
+                            }
+                        }
+                        if (owner != null) dlg.Owner = owner;
+                    }
+                    catch { /* dialog still works without an owner */ }
                     dlg.ShowDialog();
 
                     // Merge user choices back into the pick list.
