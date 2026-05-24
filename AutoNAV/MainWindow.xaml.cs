@@ -198,22 +198,23 @@ namespace AutoNAV
             var result = new List<string[]>();
             foreach (var row in disciplineCheckboxPanel.Children)
             {
-                if (row is StackPanel sp && sp.Children.Count >= 2)
-                {
-                    if (sp.Children[0] is CheckBox cb && cb.IsChecked == true)
-                    {
-                        string disc = cb.Tag as string;
-                        if (sp.Children[1] is ComboBox cmb && cmb.SelectedItem is ComboBoxItem sel)
-                        {
-                            string tag = sel.Tag as string;
-                            if (!string.IsNullOrEmpty(tag) && tag.Contains("|"))
-                            {
-                                string[] parts = tag.Split('|');
-                                result.Add(new string[] { disc, parts[0], parts[1] });
-                            }
-                        }
-                    }
-                }
+                // Type-based lookup so the row order doesn't break us when we
+                // add adornments (e.g. the "(Mechanical)" italic label PR #9
+                // inserted in front of the CheckBox).
+                if (!(row is StackPanel sp)) continue;
+
+                CheckBox cb = sp.Children.OfType<CheckBox>().FirstOrDefault();
+                ComboBox cmb = sp.Children.OfType<ComboBox>().FirstOrDefault();
+                if (cb == null || cmb == null) continue;
+                if (cb.IsChecked != true) continue;
+
+                string disc = cb.Tag as string;
+                if (!(cmb.SelectedItem is ComboBoxItem sel)) continue;
+                string tag = sel.Tag as string;
+                if (string.IsNullOrEmpty(tag) || !tag.Contains("|")) continue;
+
+                string[] parts = tag.Split('|');
+                result.Add(new string[] { disc, parts[0], parts[1] });
             }
             return result;
         }
@@ -470,8 +471,11 @@ namespace AutoNAV
         private void ForEachDisciplineCheckBox(Func<bool, bool> setter)
         {
             foreach (UIElement child in disciplineCheckboxPanel.Children)
-                if (child is StackPanel sp && sp.Children.Count >= 1 && sp.Children[0] is CheckBox cb)
-                    cb.IsChecked = setter(cb.IsChecked.GetValueOrDefault());
+            {
+                if (!(child is StackPanel sp)) continue;
+                CheckBox cb = sp.Children.OfType<CheckBox>().FirstOrDefault();
+                if (cb != null) cb.IsChecked = setter(cb.IsChecked.GetValueOrDefault());
+            }
         }
 
         private void BtnSelectAll_Click(object sender, RoutedEventArgs e) =>
