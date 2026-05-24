@@ -526,9 +526,73 @@ namespace AutoNAV
 
         #endregion
 
-        #region Function 5 Event Handlers
+        #region Function 6 + 7 grouping handlers
 
+        // Function 6 uses GridIntersection as a fixed proximity-grouping mode.
+        // Spatially-close clashes cluster on the same grid intersection so the
+        // user can see problem areas at a glance, and the naming template adds
+        // the discipline / selection-set / level context to each cluster's
+        // name.  No mode dropdown is exposed in the UI for this function — the
+        // user only picks the template.
+        private const ClashGrouper.GroupingMode Function6PrimaryMode    = ClashGrouper.GroupingMode.GridIntersection;
+        private const ClashGrouper.GroupingMode Function6SubGroupingMode = ClashGrouper.GroupingMode.None;
+
+        // Function 6 — Group selected test (proximity-driven).
         private void OnGroupClashesClick(object sender, RoutedEventArgs e)
+        {
+            GroupSingleTest("Function 6 — Group Clashes",
+                            Function6PrimaryMode, Function6SubGroupingMode);
+        }
+
+        // Function 6 — Group all tests (proximity-driven).
+        private void OnGroupAllTestsClick(object sender, RoutedEventArgs e)
+        {
+            GroupAllTestsCore("Function 6 — Group All Tests",
+                              Function6PrimaryMode, Function6SubGroupingMode);
+        }
+
+        // Function 7 — Group selected test using the user-picked primary/sub modes.
+        private void OnFunction7GroupSelectedClick(object sender, RoutedEventArgs e)
+        {
+            var modes = GetFunction7Modes(out string error);
+            if (error != null)
+            {
+                MessageBox.Show(error, "Function 7 — Manual Grouping",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            GroupSingleTest("Function 7 — Manual Grouping", modes.primary, modes.sub);
+        }
+
+        // Function 7 — Group all tests using the user-picked primary/sub modes.
+        private void OnFunction7GroupAllClick(object sender, RoutedEventArgs e)
+        {
+            var modes = GetFunction7Modes(out string error);
+            if (error != null)
+            {
+                MessageBox.Show(error, "Function 7 — Manual Grouping",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            GroupAllTestsCore("Function 7 — Manual Grouping", modes.primary, modes.sub);
+        }
+
+        // Reads the Function 7 ComboBoxes; emits a friendly error string when
+        // neither mode is set, otherwise returns the (primary, sub) pair.
+        private (ClashGrouper.GroupingMode primary, ClashGrouper.GroupingMode sub) GetFunction7Modes(out string error)
+        {
+            error = null;
+            string p = (cmbGroupingMode.SelectedItem    as ComboBoxItem)?.Tag as string;
+            string s = (cmbSubGroupingMode.SelectedItem as ComboBoxItem)?.Tag as string;
+            var primary = ParseGroupingMode(p);
+            var sub     = ParseGroupingMode(s);
+            if (primary == ClashGrouper.GroupingMode.None && sub == ClashGrouper.GroupingMode.None)
+                error = "Pick a Primary or Sub-Grouping mode before clicking Function 7's group button.";
+            return (primary, sub);
+        }
+
+        // Shared single-test grouping core used by both Function 6 and Function 7.
+        private void GroupSingleTest(string caption, ClashGrouper.GroupingMode primary, ClashGrouper.GroupingMode sub)
         {
             try
             {
@@ -537,24 +601,7 @@ namespace AutoNAV
 
                 if (string.IsNullOrEmpty(testName))
                 {
-                    MessageBox.Show("Please select a clash test to group.", "Group Clashes",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                var groupingModeItem = cmbGroupingMode.SelectedItem as ComboBoxItem;
-                var subGroupingModeItem = cmbSubGroupingMode.SelectedItem as ComboBoxItem;
-                
-                string groupingModeStr = groupingModeItem?.Tag as string;
-                string subGroupingModeStr = subGroupingModeItem?.Tag as string;
-                bool keepExisting = chkKeepExistingGroups.IsChecked == true;
-
-                ClashGrouper.GroupingMode groupingMode = ParseGroupingMode(groupingModeStr);
-                ClashGrouper.GroupingMode subGroupingMode = ParseGroupingMode(subGroupingModeStr);
-
-                if (groupingMode == ClashGrouper.GroupingMode.None && subGroupingMode == ClashGrouper.GroupingMode.None)
-                {
-                    MessageBox.Show("Please select at least one grouping mode (Primary or Sub-Grouping).", "Group Clashes",
+                    MessageBox.Show("Please select a clash test to group.", caption,
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
@@ -562,91 +609,71 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("No active document found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
-
                 DocumentClash documentClash = doc.GetClash();
                 if (documentClash == null)
                 {
-                    MessageBox.Show("Clash Detective is not available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Clash Detective is not available.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
                 ClashTest selectedTest = null;
                 foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
                 {
-                    if (test.DisplayName == testName)
-                    {
-                        selectedTest = test;
-                        break;
-                    }
+                    if (test.DisplayName == testName) { selectedTest = test; break; }
                 }
-
                 if (selectedTest == null)
                 {
-                    MessageBox.Show("Clash test not found: " + testName, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Clash test not found: " + testName, caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
+                bool keepExisting = chkKeepExistingGroups.IsChecked == true;
                 string template = GetSelectedNamingTemplate();
                 var newStatuses = GetNewStatusFilter();
                 var regroupStatuses = GetRegroupStatusFilter();
-                ClashGrouper.GroupClashes(selectedTest, groupingMode, subGroupingMode, keepExisting, template,
+
+                ClashGrouper.GroupClashes(selectedTest, primary, sub, keepExisting, template,
                                           newStatuses, regroupStatuses);
 
                 MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
-                    "Group Clashes", MessageBoxButton.OK, MessageBoxImage.Information);
+                    caption, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error grouping clashes:\n\n" + ex.Message, "Error",
+                MessageBox.Show("Error grouping clashes:\n\n" + ex.Message, caption,
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void OnGroupAllTestsClick(object sender, RoutedEventArgs e)
+        // Shared all-tests grouping core used by both Function 6 and Function 7.
+        private void GroupAllTestsCore(string caption, ClashGrouper.GroupingMode primary, ClashGrouper.GroupingMode sub)
         {
             try
             {
-                var groupingModeItem = cmbGroupingMode.SelectedItem as ComboBoxItem;
-                var subGroupingModeItem = cmbSubGroupingMode.SelectedItem as ComboBoxItem;
-                
-                string groupingModeStr = groupingModeItem?.Tag as string;
-                string subGroupingModeStr = subGroupingModeItem?.Tag as string;
-                bool keepExisting = chkKeepExistingGroups.IsChecked == true;
-
-                ClashGrouper.GroupingMode groupingMode = ParseGroupingMode(groupingModeStr);
-                ClashGrouper.GroupingMode subGroupingMode = ParseGroupingMode(subGroupingModeStr);
-
-                if (groupingMode == ClashGrouper.GroupingMode.None && subGroupingMode == ClashGrouper.GroupingMode.None)
-                {
-                    MessageBox.Show("Please select at least one grouping mode (Primary or Sub-Grouping).", "Group All Tests",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("No active document found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
-
                 DocumentClash documentClash = doc.GetClash();
                 if (documentClash == null)
                 {
-                    MessageBox.Show("Clash Detective is not available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("Clash Detective is not available.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
                 var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
                 if (tests.Count == 0)
                 {
-                    MessageBox.Show("No clash tests found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show("No clash tests found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
+                bool keepExisting = chkKeepExistingGroups.IsChecked == true;
                 string template = GetSelectedNamingTemplate();
                 var newStatuses = GetNewStatusFilter();
                 var regroupStatuses = GetRegroupStatusFilter();
@@ -657,7 +684,7 @@ namespace AutoNAV
                 {
                     try
                     {
-                        ClashGrouper.GroupClashes(test, groupingMode, subGroupingMode, keepExisting, template,
+                        ClashGrouper.GroupClashes(test, primary, sub, keepExisting, template,
                                                   newStatuses, regroupStatuses);
                         groupedCount++;
                     }
@@ -669,11 +696,11 @@ namespace AutoNAV
                 }
 
                 MessageBox.Show($"Grouping complete!\n\nTests Grouped: {groupedCount}\nFailed: {failedCount}",
-                    "Group All Tests", MessageBoxButton.OK, MessageBoxImage.Information);
+                    caption, MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error:\n\n" + ex.Message, "Error",
+                MessageBox.Show("Error:\n\n" + ex.Message, caption,
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -967,8 +994,8 @@ namespace AutoNAV
                 {
                     ClashGrouper.GroupClashes(
                         test,
-                        ClashGrouper.GroupingMode.None,            // primary mode
-                        ClashGrouper.GroupingMode.GridIntersection, // sub-group fallback so {Area} populates
+                        Function6PrimaryMode,    // proximity (GridIntersection)
+                        Function6SubGroupingMode, // no sub-mode
                         keepExistingGroups: true,
                         namingTemplate: template,
                         newStatusFilter: newStatuses,
