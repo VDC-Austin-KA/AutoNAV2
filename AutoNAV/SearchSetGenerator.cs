@@ -193,8 +193,9 @@ namespace AutoNAV
                     catch { /* dialog still works without an owner */ }
                     dlg.ShowDialog();
 
-                    // Merge user choices back into the pick list.
-                    char sep = DetectSeparator(string.Join("|", allFileNames));
+                    // Merge user choices back into the pick list.  Tokens are
+                    // stored bare (no separator wrap) so the runtime search
+                    // matches regardless of which separator the filename uses.
                     foreach (var chosen in dlg.Choices)
                     {
                         // Match by source file; replace the pick in-place.
@@ -202,12 +203,12 @@ namespace AutoNAV
                         {
                             if (string.Equals(picks[i].SourceFile, chosen.Key, StringComparison.OrdinalIgnoreCase))
                             {
-                                string token = chosen.Value;
-                                if (!string.IsNullOrWhiteSpace(token))
+                                string token = chosen.Value?.Trim();
+                                if (!string.IsNullOrEmpty(token))
                                 {
                                     var p = picks[i];
                                     p.DisplayName = token;
-                                    p.Pattern = sep + token + sep;
+                                    p.Pattern = token;
                                     p.FromDictionary = true;
                                     p.CanonicalName = TryMatchDiscipline(token, out _, out string canon) ? canon : token;
                                     picks[i] = p;
@@ -219,8 +220,8 @@ namespace AutoNAV
                 }
 
                 // Collapse to unique patterns (multiple files can share one
-                // discipline → one search set).  Also populate the registry so
-                // Function 2 can read each search-set's canonical discipline.
+                // discipline → one search set).  Patterns are bare tokens now,
+                // so the display name == pattern.
                 var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var patterns = new List<string>();
                 foreach (var p in picks)
@@ -228,8 +229,7 @@ namespace AutoNAV
                     if (seenPatterns.Add(p.Pattern))
                     {
                         patterns.Add(p.Pattern);
-                        string display = StripSeparatorWrapping(p.Pattern);
-                        DisciplineRegistry[display] =
+                        DisciplineRegistry[p.DisplayName] =
                             p.FromDictionary
                                 ? p.CanonicalName
                                 : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);
@@ -689,40 +689,46 @@ namespace AutoNAV
 
         // Per-file shortest-unique-subsequence pick used as the fallback when the
         // discipline dictionary doesn't hit.  Returns (pattern, displayName).
+        // Picks the shortest contiguous token subsequence of `candidates` that
+        // appears in `file` at separator-bounded positions AND in no other
+        // file at separator-bounded positions.  The returned Pattern is the
+        // bare token (no separator wrapping) — the search at runtime uses the
+        // bare token via DisplayStringContains, which works for filenames
+        // using any of '-', '_', or ' ' as separators.
         private static (string Pattern, string DisplayName) PickFallbackDiscriminator(
-            string file, List<string> candidates, List<string> allFiles, char sep)
+            string file, List<string> candidates, List<string> allFiles)
         {
-            var tokens = candidates;
-            for (int len = 1; len <= tokens.Count; len++)
+            for (int len = 1; len <= candidates.Count; len++)
             {
-                for (int start = 0; start + len <= tokens.Count; start++)
+                for (int start = 0; start + len <= candidates.Count; start++)
                 {
-                    var slice = tokens.GetRange(start, len);
-                    string joined = string.Join(sep.ToString(), slice);
-                    string candidate = sep + joined + sep;
+                    var slice = candidates.GetRange(start, len);
+                    // Join with '-' as a canonical pattern shape for multi-token
+                    // discriminators; uniqueness still respects any separator
+                    // because ContainsTokenAtBoundary is separator-agnostic.
+                    string joined = string.Join("-", slice);
 
-                    if (file.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (!ContainsTokenAtBoundary(file, joined)) continue;
 
                     bool inOther = false;
                     foreach (string g in allFiles)
                     {
                         if (string.Equals(g, file, StringComparison.OrdinalIgnoreCase)) continue;
-                        if (g.IndexOf(candidate, StringComparison.OrdinalIgnoreCase) >= 0)
-                        { inOther = true; break; }
+                        if (ContainsTokenAtBoundary(g, joined)) { inOther = true; break; }
                     }
                     if (inOther) continue;
 
-                    return (candidate, joined);
+                    return (joined, joined);
                 }
             }
 
-            // Full candidate-token string fallback
-            if (tokens.Count > 0)
+            // Full candidate-token string fallback (still bare, no separator wrap).
+            if (candidates.Count > 0)
             {
-                string joined = string.Join(sep.ToString(), tokens);
-                return (sep + joined + sep, joined);
+                string joined = string.Join("-", candidates);
+                return (joined, joined);
             }
-            // Last resort
+            // Last resort: the entire filename.
             return (file, file);
         }
 
@@ -761,13 +767,12 @@ namespace AutoNAV
                 .ToList();
             if (allFiles.Count == 0) return picks;
 
-            char sep = DetectSeparator(string.Join("|", allFiles));
-
-            // Split + compute per-file candidates (no level codes, no
-            // universally-shared tokens).
+            // Split + compute per-file candidates.  Split on ANY of the three
+            // separators (-, _, space) so the algorithm handles mixed-separator
+            // filenames cleanly.
             var fileSegments = allFiles.ToDictionary(
                 f => f,
-                f => f.Split(new[] { sep }, StringSplitOptions.RemoveEmptyEntries).ToList(),
+                f => f.Split(AllSeparators, StringSplitOptions.RemoveEmptyEntries).ToList(),
                 StringComparer.OrdinalIgnoreCase);
 
             HashSet<string> universal = null;
@@ -804,9 +809,13 @@ namespace AutoNAV
 
                 if (hitToken != null)
                 {
+                    // Pattern is the BARE token; the Navisworks search uses
+                    // DisplayStringContains which matches regardless of which
+                    // separator characters the filename actually uses around
+                    // the token.
                     picks.Add(new DisciplinePick
                     {
-                        Pattern = sep + hitToken + sep,
+                        Pattern = hitToken,
                         DisplayName = hitToken,
                         SourceFile = file,
                         FromDictionary = true,
@@ -816,7 +825,7 @@ namespace AutoNAV
                 }
 
                 // Stage 2: per-file shortest unique discriminator fallback.
-                var fallback = PickFallbackDiscriminator(file, tokens, allFiles, sep);
+                var fallback = PickFallbackDiscriminator(file, tokens, allFiles);
                 picks.Add(new DisciplinePick
                 {
                     Pattern = fallback.Pattern,
@@ -856,11 +865,51 @@ namespace AutoNAV
                     .Equals(name, StringComparison.OrdinalIgnoreCase));
         }
 
-        // Detect the dominant separator in a string ('-' beats '_').
+        // ─────────────────────────────────────────────────────────────────────
+        // Separator handling.
+        //
+        // Filenames in the wild mix '-', '_' and spaces (sometimes within the
+        // same file).  The old algorithm picked ONE dominant separator via
+        // DetectSeparator and used it both for tokenisation and for wrapping
+        // the search pattern.  That broke whenever a file used a different
+        // separator than the majority.
+        //
+        // New approach: treat all three characters as equivalent separators
+        // everywhere — tokenise on any of them, test uniqueness with
+        // word-boundary matching, and store the search pattern as the bare
+        // token (no separator wrap) so the runtime Navisworks substring search
+        // works regardless of which separator the filename actually uses.
+        // ─────────────────────────────────────────────────────────────────────
+        private static readonly char[] AllSeparators = { '-', '_', ' ' };
+
+        private static bool IsSep(char c) => c == '-' || c == '_' || c == ' ';
+
+        // True iff `token` appears in `text` with separator characters (or
+        // string boundaries) on BOTH sides — i.e. it's a whole word and not
+        // a substring of a longer token.
+        private static bool ContainsTokenAtBoundary(string text, string token)
+        {
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(token)) return false;
+            int from = 0;
+            while (true)
+            {
+                int idx = text.IndexOf(token, from, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0) return false;
+                bool leftOk  = idx == 0                         || IsSep(text[idx - 1]);
+                bool rightOk = idx + token.Length == text.Length || IsSep(text[idx + token.Length]);
+                if (leftOk && rightOk) return true;
+                from = idx + 1;
+            }
+        }
+
+        // Retained for back-compat with any callers (e.g. PR #11's diagnostics).
+        // No longer used by the discipline classifier itself.
         private static char DetectSeparator(string s)
         {
             int dashes      = s.Count(c => c == '-');
             int underscores = s.Count(c => c == '_');
+            int spaces      = s.Count(c => c == ' ');
+            if (spaces > dashes && spaces > underscores) return ' ';
             return dashes >= underscores ? '-' : '_';
         }
 
