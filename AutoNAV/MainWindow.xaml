@@ -157,22 +157,102 @@ Foreground="#333333">
                             </StackPanel>
                         </Border>
 
-                        <!-- FUNCTION 6 (Run + Group Clashes — was Function 5) -->
+                        <!-- FUNCTION 6 (Proximity grouping driven by the naming template) -->
                         <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
                             <StackPanel Margin="15">
-                                <TextBlock Text="Function 6: Run Tests &amp; Group Clashes" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="Run all clash tests and optionally group results by various criteria." FontSize="11" Foreground="#888888" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                <TextBlock Text="Function 6: Run Tests &amp; Group Clashes by Proximity" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
+                                    Groups clashes by the nearest grid intersection so spatially-close
+                                    clashes share a group — letting you see problem areas at a glance.
+                                    The clash's discipline / selection-set details land in the group
+                                    name via the template below (and can be elaborated on as comments
+                                    or issues once the groups exist).
+                                </TextBlock>
 
                                 <!-- UPDATE ALL TESTS SECTION -->
                                 <TextBlock Text="1. Run All Clash Tests:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <Button Name="btnUpdateAllTests" Content="Update All Tests (Run Simultaneously)" Click="OnUpdateAllTestsClick" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="250" HorizontalAlignment="Left" Margin="0,0,0,15"/>
                                 <TextBlock Text="Runs all clash tests simultaneously in the background." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
 
-                                <!-- GROUPING OPTIONS SECTION -->
-                                <TextBlock Text="2. Group Clash Results:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <TextBlock Text="Select a grouping method and click 'Group Clashes' to organize results." FontSize="10" Foreground="#666666" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                                <!-- KEEP-EXISTING + TEST SELECTION -->
+                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" IsChecked="True" Margin="0,0,0,10"/>
+                                <TextBlock Text="2. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
 
-                                <!-- Grouping Mode Selection -->
+                                <!-- NAMING TEMPLATE -->
+                                <TextBlock Text="3. Clash Group Naming Template:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <ComboBox Name="cmbNamingTemplate" Width="600" Height="26" FontSize="11" Margin="0,0,0,4"
+                                          SelectionChanged="OnNamingTemplateChanged">
+                                    <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  IsSelected="True"/>
+                                    <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                    <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
+                                                  Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                    <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
+                                                  Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                    <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
+                                </ComboBox>
+                                <TextBlock Text="Preview:" FontSize="9" Foreground="#666666" Margin="0,2,0,2"/>
+                                <TextBlock Name="txtNamingPreview" Text="" FontSize="10" Foreground="#0078D4" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,10">
+                                    Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.
+                                    Missing data falls back to placeholders (LXX, AREA) so every clash is named.
+                                </TextBlock>
+
+                                <!-- STATUS FILTERS -->
+                                <TextBlock Text="4. Status Filters:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+
+                                <Border Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="New Clashes — statuses to GROUP &amp; NAME" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Only clashes whose status matches one of these will be grouped." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Name="chkNewStatusNew"         Content="New"          FontSize="10" IsChecked="True"  Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                            <CheckBox Name="chkNewStatusActive"      Content="Active"       FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                            <CheckBox Name="chkNewStatusReviewed"    Content="Under Review" FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Name="brdRegroup" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,10">
+                                    <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
+                                        <TextBlock Text="Regroup &amp; Rename — re-apply template to existing groups with these statuses" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Enabled only when no &quot;New Clashes&quot; status is selected above." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <CheckBox Name="chkRegroupStatusNew"      Content="New"          FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusActive"   Content="Active"       FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusApproved" Content="Approved"     FontSize="10" Margin="0,0,12,0"/>
+                                            <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"     FontSize="10" Margin="0,0,12,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- GROUP BUTTONS -->
+                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
+                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"
+                                            ToolTip="Apply the current naming template to clash groups currently selected in Clash Detective. With nothing selected, shows a picker."/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FUNCTION 7 (Manual / Advanced Grouping — fallback when Function 6's proximity grouping isn't what you want) -->
+                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
+                            <StackPanel Margin="15">
+                                <TextBlock Text="Function 7: Manual / Advanced Grouping" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
+                                    Fallback grouper. Pick a primary and (optional) sub-grouping mode
+                                    yourself. Uses the same test selector, naming template, and status
+                                    filters from Function 6 above — only the grouping mode is different.
+                                </TextBlock>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                     <TextBlock Text="Primary Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <ComboBox Name="cmbGroupingMode" Width="180" Height="26" FontSize="11">
@@ -212,72 +292,9 @@ Foreground="#333333">
                                     </ComboBox>
                                 </StackPanel>
 
-                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" IsChecked="True" Margin="0,0,0,10"/>
-
-                                <!-- CLASH TEST SELECTION -->
-                                <TextBlock Text="3. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
-
-                                <!-- NAMING TEMPLATE -->
-                                <TextBlock Text="4. Clash Group Naming Template:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <ComboBox Name="cmbNamingTemplate" Width="600" Height="26" FontSize="11" Margin="0,0,0,4"
-                                          SelectionChanged="OnNamingTemplateChanged">
-                                    <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  IsSelected="True"/>
-                                    <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
-                                    <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
-                                                  Tag="{}{TestName} | {Level}_{Area} {#}"/>
-                                    <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
-                                    <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
-                                </ComboBox>
-                                <TextBlock Text="Preview:" FontSize="9" Foreground="#666666" Margin="0,2,0,2"/>
-                                <TextBlock Name="txtNamingPreview" Text="" FontSize="10" Foreground="#0078D4" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,10">
-                                    Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.
-                                    Missing data falls back to placeholders (LXX, AREA) so every clash is named.
-                                </TextBlock>
-
-                                <!-- STATUS FILTERS -->
-                                <TextBlock Text="5. Status Filters:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
-
-                                <Border Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <TextBlock Text="New Clashes — statuses to GROUP &amp; NAME" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Only clashes whose status matches one of these will be grouped." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Name="chkNewStatusNew"         Content="New"          FontSize="10" IsChecked="True"  Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                            <CheckBox Name="chkNewStatusActive"      Content="Active"       FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                            <CheckBox Name="chkNewStatusReviewed"    Content="Under Review" FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Name="brdRegroup" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,10">
-                                    <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
-                                        <TextBlock Text="Regroup &amp; Rename — re-apply template to existing groups with these statuses" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Enabled only when no &quot;New Clashes&quot; status is selected above." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Name="chkRegroupStatusNew"      Content="New"          FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusActive"   Content="Active"       FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusApproved" Content="Approved"     FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"     FontSize="10" Margin="0,0,12,0"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- GROUP BUTTONS -->
                                 <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
-                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
-                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"
-                                            ToolTip="Apply the current naming template to clash groups currently selected in Clash Detective. With nothing selected, shows a picker."/>
+                                    <Button Name="btnFunction7GroupSelected" Content="Group Selected Test (Manual)" Click="OnFunction7GroupSelectedClick" Padding="10,8" Background="#107C10" Foreground="White" FontWeight="Bold" Width="220" HorizontalAlignment="Left"/>
+                                    <Button Name="btnFunction7GroupAll" Content="Group All Tests (Manual)" Click="OnFunction7GroupAllClick" Padding="10,8" Background="#107C10" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left" Margin="10,0,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
