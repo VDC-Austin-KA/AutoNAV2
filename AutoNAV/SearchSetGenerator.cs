@@ -22,6 +22,78 @@ namespace AutoNAV
             public List<string> MatchedFiles { get; set; }
         }
 
+        // Registry populated by GenerateFunction1SearchSets: discipline
+        // search-set display name → canonical discipline ("Architectural",
+        // "Mechanical", …) or null for unrecognised tokens that the user
+        // didn't override. Function 2 reads this to pick discipline-appropriate
+        // element-property defaults.
+        public static readonly Dictionary<string, string> DisciplineRegistry =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // Canonical discipline → list of (Label, Category, Property) tuples
+        // used to populate Function 2's property dropdown per row.
+        // Tuple "*-File" entries are the "everything in this file" catch-all
+        // that guarantees no element is left unselectable.
+        public static (string Label, string Category, string Property)[] PropertyOptionsFor(string canonicalDiscipline)
+        {
+            switch (canonicalDiscipline)
+            {
+                case "Mechanical":
+                case "Plumbing":
+                case "Electrical":
+                    return new[]
+                    {
+                        ("Element System Abbreviation",        "Element", "System Abbreviation"),
+                        ("Element System Classification",      "Element", "System Classification"),
+                        ("Element Workset",                    "Element", "Workset"),
+                        ("Element System Type",                "Element", "System Type"),
+                        ("Element Properties System Abbrev.",  "Element Properties", "System Abbreviation"),
+                        ("System Type → Name",                 "System Type", "Name"),
+                        ("Element Category (Mech. Equipment)", "Element", "Category"),
+                        ("Element → File (catch-all)",         "Element", "File"),
+                    };
+                case "Fire Protection":
+                    return new[]
+                    {
+                        ("Element System Abbreviation",        "Element", "System Abbreviation"),
+                        ("Element System Classification",      "Element", "System Classification"),
+                        ("Element Workset",                    "Element", "Workset"),
+                        ("Element System Type",                "Element", "System Type"),
+                        ("Element Properties System Abbrev.",  "Element Properties", "System Abbreviation"),
+                        ("System Type → Name",                 "System Type", "Name"),
+                        ("Element Category",                   "Element", "Category"),
+                        ("Item → Layer",                       "Item", "Layer"),
+                        ("Item → Type",                        "Item", "Type"),
+                        ("Element → File (catch-all)",         "Element", "File"),
+                    };
+                case "Telecommunications":
+                case "Security":
+                case "Audio/Visual":
+                    return new[]
+                    {
+                        ("Element System Abbreviation",        "Element", "System Abbreviation"),
+                        ("Element Workset",                    "Element", "Workset"),
+                        ("Element Category",                   "Element", "Category"),
+                        ("Element Type",                       "Element", "Type"),
+                        ("Item → Layer",                       "Item", "Layer"),
+                        ("Element → File (catch-all)",         "Element", "File"),
+                    };
+                default:
+                    // Architectural, Structural, Interiors, Civil, Landscape,
+                    // and everything else (including unknown / fallback-derived
+                    // disciplines) gets the original generic option set.
+                    return new[]
+                    {
+                        ("Element Category",   "Element", "Category"),
+                        ("Element Workset",    "Element", "Workset"),
+                        ("Element Level",      "Element", "Level"),
+                        ("Element System",     "Element", "System Name"),
+                        ("Element Type",       "Element", "Type"),
+                        ("Element → File (catch-all)", "Element", "File"),
+                    };
+            }
+        }
+
         // ─────────────────────────────────────────────────────────────────────
         // Function 1 — Discipline Search Sets
         //
@@ -125,12 +197,21 @@ namespace AutoNAV
                 }
 
                 // Collapse to unique patterns (multiple files can share one
-                // discipline → one search set).
+                // discipline → one search set).  Also populate the registry so
+                // Function 2 can read each search-set's canonical discipline.
                 var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 var patterns = new List<string>();
                 foreach (var p in picks)
                 {
-                    if (seenPatterns.Add(p.Pattern)) patterns.Add(p.Pattern);
+                    if (seenPatterns.Add(p.Pattern))
+                    {
+                        patterns.Add(p.Pattern);
+                        string display = StripSeparatorWrapping(p.Pattern);
+                        DisciplineRegistry[display] =
+                            p.FromDictionary
+                                ? p.CanonicalName
+                                : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);
+                    }
                 }
 
                 DocumentSelectionSets selSets = doc.SelectionSets;

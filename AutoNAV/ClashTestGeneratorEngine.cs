@@ -16,6 +16,20 @@ namespace AutoNAV
         private static readonly string[] PRECURSOR_NAMES = { "Floors", "Walls" };
         private StringBuilder _executionLog;
 
+        // Triggers Navisworks' "Update All" on every clash test. Returns the
+        // number of tests executed, or -1 if Clash Detective wasn't available.
+        // Throws on hard errors so callers (AutoNAVismate) can decide whether
+        // to prompt the user to run tests manually.
+        public static int RunAllClashTests()
+        {
+            Document doc = Autodesk.Navisworks.Api.Application.ActiveDocument;
+            if (doc == null) return -1;
+            DocumentClash documentClash = doc.GetClash();
+            if (documentClash == null || documentClash.TestsData == null) return -1;
+            documentClash.TestsData.TestsRunAllTests();
+            return ClashCompat.GetTopLevelTests(documentClash.TestsData).OfType<ClashTest>().Count();
+        }
+
         // Function 4 - Standard Clash Test Generation
         public void GenerateClashTests()
         {
@@ -138,8 +152,30 @@ namespace AutoNAV
                 LogMessage(string.Format("[{0:HH:mm:ss}] Generation complete", DateTime.Now));
                 LogMessage(string.Format("Summary: Created={0}, Skipped={1}, Failed={2}", createdCount, skippedCount, failedCount));
 
-                string summary = string.Format("Clash Test Generation Complete\n\nCreated: {0}\nSkipped: {1}\nFailed: {2}\n\nTotal: {3}\n\nYour clash tests are now ready for execution in Clash Detective.",
-                    createdCount, skippedCount, failedCount, createdCount + skippedCount + failedCount);
+                // Auto-run all clash tests so the user doesn't have to click
+                // "Update All" in Clash Detective afterwards.
+                int runCount = 0, runFailed = 0;
+                try
+                {
+                    LogMessage(string.Format("[{0:HH:mm:ss}] Running all clash tests...", DateTime.Now));
+                    documentClash.TestsData.TestsRunAllTests();
+                    runCount = ClashCompat.GetTopLevelTests(documentClash.TestsData).OfType<ClashTest>().Count();
+                    LogMessage(string.Format("[{0:HH:mm:ss}] Run complete: {1} test(s) executed", DateTime.Now, runCount));
+                }
+                catch (Exception runEx)
+                {
+                    runFailed = 1;
+                    LogMessage("Run-all failed: " + runEx.Message);
+                }
+
+                string summary = string.Format(
+                    "Clash Test Generation Complete\n\n" +
+                    "Created: {0}\nSkipped: {1}\nFailed: {2}\n\n" +
+                    "Total: {3}\n\n" +
+                    (runFailed == 0
+                        ? "All {4} test(s) were executed. Results are ready for grouping in Functions 5 / 6."
+                        : "Auto-run failed — open Clash Detective and click \"Update All\" manually."),
+                    createdCount, skippedCount, failedCount, createdCount + skippedCount + failedCount, runCount);
 
                 MessageBox.Show(summary, "Function 4 - Clash Generation Results",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
