@@ -4,27 +4,37 @@ Automated Design Coordination plugin for Autodesk Navisworks Manage 2024 / 2025 
 
 ## Install
 
-Download these two files from the [latest commit](../../tree/main):
+Pick whichever works best for you:
+
+### Option A — One-click NSIS installer (recommended)
+
+Download **`AutoNAV-Setup.exe`** (~160 KB, built with NSIS) and double-click.
+
+NSIS is the same installer technology used by tens of thousands of public Windows installers (7-Zip, OBS Studio, Audacity, FileZilla, …), so the bootloader has long-standing reputation in SmartScreen, Defender, and Chrome's safe-browsing databases. The installer is unsigned, so SmartScreen may still show a one-time "Windows protected your PC" prompt — if so, click **More info → Run anyway**. Most browsers download it without warning.
+
+### Option B — PowerShell installer (zero AV warnings)
+
+If SmartScreen still complains, download these two files together:
 
 - **`Install-AutoNAV.cmd`**
 - **`Install-AutoNAV.ps1`**
 
-Keep them in the **same folder**, then double-click **`Install-AutoNAV.cmd`**.
+…and double-click **`Install-AutoNAV.cmd`**. Both files are plain text — no SmartScreen / AV warning on download anywhere.
 
-Windows will prompt for administrator rights (the installer writes into `C:\Program Files\Autodesk\…`). Accept, and the script will:
+### What either installer does
+
+Both methods perform the same install. Windows will prompt for administrator rights (the installer writes into `C:\Program Files\Autodesk\…`). Accept, and the script will:
 
 1. Close Navisworks if it's running.
 2. For every detected Navisworks Manage 2024 / 2025 / 2026 / 2027 install, drop the matching `AutoNAV.dll` + `AutoNAV.addin` into `C:\Program Files\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\`.
-3. Back up any prior install into `…\Plugins\AutoNAV\Backup_<timestamp>\`.
+3. Back up any prior install (`AutoNAV-Setup.exe` → `*.backup` files; `.ps1` → `Backup_<timestamp>\` folder).
 4. Print a per-year status summary.
 
 Launch Navisworks → **Add-Ins ribbon tab** → **AutoNAV**.
 
-### Why .cmd + .ps1 instead of a .exe?
+### Why isn't the .exe truly warning-free?
 
-The installer was previously an `.exe`. Windows SmartScreen and most browsers flag unsigned Windows executables as "potentially dangerous" because they can't verify a publisher signature. A plain-text PowerShell script with a small `.cmd` wrapper gets no such warning on download — they're text files, not executable binaries.
-
-Behaviour is identical to the old `.exe`: same files written, same locations, same UAC elevation. The per-version DLLs are embedded inside `Install-AutoNAV.ps1` as base64 strings, so it's still a "single-script-plus-launcher" download with no separate `.zip` extraction.
+Code-signing — the only way to *guarantee* zero SmartScreen prompts — requires a signing certificate (~$200–700/year from DigiCert / Sectigo / Comodo). Without one, Windows treats every unsigned binary as untrusted by default, regardless of how it's built. NSIS-built installers fare better than raw Go binaries because the bootloader itself has a long reputation history, but they're not bulletproof. The PowerShell option (B) sidesteps the problem entirely because text files don't get SmartScreen treatment.
 
 ### Running from PowerShell directly
 
