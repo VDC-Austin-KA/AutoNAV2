@@ -82,6 +82,16 @@ namespace AutoNAV
 
                 LogMessage(string.Format("Found {0} disciplines: {1}", disciplines.Count, string.Join(", ", disciplines)));
 
+                // Sort disciplines into a "SelectionA priority" list so Structural /
+                // Architectural land on the left side of the clash tests they're
+                // involved in.  Identified disciplines (canonical assigned in
+                // SearchSetGenerator.DisciplineRegistry) win over name-pattern
+                // matches, and Structural beats Architectural at every tier.
+                List<string> prioritySorted = SortDisciplinesByPriority(disciplines);
+                List<string> alphabetical = disciplines.OrderBy(d => d, StringComparer.OrdinalIgnoreCase).ToList();
+
+                LogMessage("Selection-A priority order: " + string.Join(", ", prioritySorted));
+
                 Dictionary<string, SavedItem> clashDisciplineFolders = BuildDisciplineFolderMap(clashSetsFolder);
 
                 int createdCount = 0;
@@ -90,19 +100,28 @@ namespace AutoNAV
 
                 LogMessage("Generating clash test combinations...");
 
-                for (int i = 0; i < disciplines.Count; i++)
+                // For each SelectionA in priority order, pair with every other
+                // discipline in alphabetical order.  A processed-pair set keeps
+                // every (A, B) combo from being emitted twice in either direction.
+                var processedPairs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string leftName in prioritySorted)
                 {
-                    for (int j = i + 1; j < disciplines.Count; j++)
+                    foreach (string rightName in alphabetical)
                     {
-                        string leftName = disciplines[i];
-                        string rightName = disciplines[j];
+                        if (string.Equals(leftName, rightName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                        // Order-independent pair key (alphabetical) so (A,B) and
+                        // (B,A) collapse to the same entry.
+                        string a = leftName, b = rightName;
+                        if (string.Compare(a, b, StringComparison.OrdinalIgnoreCase) > 0) { var t = a; a = b; b = t; }
+                        string pairKey = a + "||" + b;
+                        if (!processedPairs.Add(pairKey)) continue;
 
                         if (!clashDisciplineFolders.ContainsKey(leftName))
                         {
                             LogMessage(string.Format("Skipping: '{0}' folder not found in {1}", leftName, CLASH_SETS_FOLDER));
                             continue;
                         }
-
                         if (!clashDisciplineFolders.ContainsKey(rightName))
                         {
                             LogMessage(string.Format("Skipping: '{0}' folder not found in {1}", rightName, CLASH_SETS_FOLDER));
@@ -637,6 +656,37 @@ namespace AutoNAV
             }
 
             return null;
+        }
+
+        // Ranks each discipline name so user-identified Structural/Architectural
+        // (canonical assigned in SearchSetGenerator.DisciplineRegistry) wind up
+        // on the SelectionA side of every clash test they participate in.
+        //   0 = identified Structural
+        //   1 = identified Architectural
+        //   2 = name-matches Structural but no canonical yet
+        //   3 = name-matches Architectural but no canonical yet
+        //   4 = everything else (alphabetical within)
+        // Final order is rank asc, then alphabetical for ties.
+        private static List<string> SortDisciplinesByPriority(IEnumerable<string> disciplines)
+        {
+            int Rank(string name)
+            {
+                if (SearchSetGenerator.DisciplineRegistry.TryGetValue(name, out string canonical) && !string.IsNullOrEmpty(canonical))
+                {
+                    if (canonical.Equals("Structural",    StringComparison.OrdinalIgnoreCase)) return 0;
+                    if (canonical.Equals("Architectural", StringComparison.OrdinalIgnoreCase)) return 1;
+                }
+                if (SearchSetGenerator.TryMatchDiscipline(name, out _, out string dictCanonical))
+                {
+                    if (dictCanonical.Equals("Structural",    StringComparison.OrdinalIgnoreCase)) return 2;
+                    if (dictCanonical.Equals("Architectural", StringComparison.OrdinalIgnoreCase)) return 3;
+                }
+                return 4;
+            }
+            return disciplines
+                .OrderBy(Rank)
+                .ThenBy(d => d, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private List<string> GetDisciplinesFromFolder(SavedItem disciplinesFolder)

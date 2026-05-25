@@ -6,20 +6,19 @@ Automated Design Coordination plugin for Autodesk Navisworks Manage 2024 / 2025 
 
 Pick whichever works best for you:
 
-### Option A — One-click NSIS installer (recommended)
+### Option A — Single-file `.cmd` (recommended; zero AV warnings)
 
-Download **`AutoNAV-Setup.exe`** (~160 KB, built with NSIS) and double-click.
+Download **`AutoNAV-Setup.cmd`** (~1.1 MB, single plain-text file) and double-click.
 
-NSIS is the same installer technology used by tens of thousands of public Windows installers (7-Zip, OBS Studio, Audacity, FileZilla, …), so the bootloader has long-standing reputation in SmartScreen, Defender, and Chrome's safe-browsing databases. The installer is unsigned, so SmartScreen may still show a one-time "Windows protected your PC" prompt — if so, click **More info → Run anyway**. Most browsers download it without warning.
+This is one file. No companion `.ps1` needed. The `.cmd` carries the entire installer (per-version DLLs + install logic) as a base64-encoded PowerShell payload embedded at the bottom; on launch it extracts the payload to `%TEMP%`, runs it (self-elevating via UAC), and cleans up afterwards. Plain text — Windows SmartScreen, Defender, and Chrome safe-browsing never flag it.
 
-### Option B — PowerShell installer (zero AV warnings)
+### Option B — NSIS-built `.exe`
 
-If SmartScreen still complains, download these two files together:
+Download **`AutoNAV-Setup.exe`** (~165 KB, built with NSIS) and double-click. NSIS is the same installer technology used by 7-Zip / OBS / Audacity / FileZilla etc., so the bootloader has long-standing reputation in most AV databases. The installer is still unsigned though, so SmartScreen *may* show a one-time "Windows protected your PC" prompt — if so, click **More info → Run anyway**.
 
-- **`Install-AutoNAV.cmd`**
-- **`Install-AutoNAV.ps1`**
+### Option C — Two-file `.cmd` + `.ps1`
 
-…and double-click **`Install-AutoNAV.cmd`**. Both files are plain text — no SmartScreen / AV warning on download anywhere.
+Download both `Install-AutoNAV.cmd` and `Install-AutoNAV.ps1` and keep them in the same folder, then double-click the `.cmd`. Functionally identical to Option A but split across two files.
 
 ### What either installer does
 
