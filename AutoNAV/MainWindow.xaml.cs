@@ -30,6 +30,7 @@ namespace AutoNAV
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            LoadRenameTree();
             LoadDisciplineList();
             LoadFunction3Disciplines();
             LoadClashTests();
@@ -639,8 +640,17 @@ namespace AutoNAV
                 var newStatuses = GetNewStatusFilter();
                 var regroupStatuses = GetRegroupStatusFilter();
 
-                ClashGrouper.GroupClashes(selectedTest, primary, sub, keepExisting, template,
-                                          newStatuses, regroupStatuses);
+                // 2-step group-then-rename: group via the legacy mode (no
+                // template), THEN apply the template to every group except
+                // "Walls" / "Floors".  This pattern produces more consistent
+                // groups + names than embedding the template inside the
+                // grouping pass and preserves any prior Walls/Floors work.
+                ClashGrouper.GroupClashes(selectedTest, primary, sub, keepExisting,
+                                          namingTemplate: "",
+                                          newStatusFilter: newStatuses,
+                                          regroupStatusFilter: regroupStatuses);
+                if (!string.IsNullOrWhiteSpace(template))
+                    RenameGroupsExcludingWallsFloors(selectedTest, template);
 
                 MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
                     caption, MessageBoxButton.OK, MessageBoxImage.Information);
@@ -688,8 +698,13 @@ namespace AutoNAV
                 {
                     try
                     {
-                        ClashGrouper.GroupClashes(test, primary, sub, keepExisting, template,
-                                                  newStatuses, regroupStatuses);
+                        // Same 2-step pattern as GroupSingleTest.
+                        ClashGrouper.GroupClashes(test, primary, sub, keepExisting,
+                                                  namingTemplate: "",
+                                                  newStatusFilter: newStatuses,
+                                                  regroupStatusFilter: regroupStatuses);
+                        if (!string.IsNullOrWhiteSpace(template))
+                            RenameGroupsExcludingWallsFloors(test, template);
                         groupedCount++;
                     }
                     catch (Exception ex)
@@ -967,6 +982,29 @@ namespace AutoNAV
             }
         }
 
+        // Walks `test`'s top-level ClashResultGroup children, applies the
+        // naming template to every group whose DisplayName isn't exactly
+        // "Walls" or "Floors" (which are Function 5's output and should be
+        // preserved as-is).  Used by both AutoNAVismate and Function 6 when a
+        // template is set — the "group-via-legacy-then-rename" 2-step that
+        // produces more reliable / consistent group names than embedding the
+        // template inside the grouping pass.
+        private static void RenameGroupsExcludingWallsFloors(ClashTest test, string template)
+        {
+            if (test == null || string.IsNullOrWhiteSpace(template)) return;
+            var toRename = new List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>();
+            foreach (var child in test.Children)
+            {
+                if (!(child is Autodesk.Navisworks.Api.Clash.ClashResultGroup grp)) continue;
+                string n = grp.DisplayName?.Trim() ?? "";
+                if (n.Equals("Walls",  StringComparison.OrdinalIgnoreCase)) continue;
+                if (n.Equals("Floors", StringComparison.OrdinalIgnoreCase)) continue;
+                toRename.Add(grp);
+            }
+            if (toRename.Count > 0)
+                ClashGrouper.RenameGroupsWithTemplate(toRename, test, template);
+        }
+
         private void SetAutoProgress(string msg)
         {
             if (txtAutoNAVismateProgress != null) txtAutoNAVismateProgress.Text = msg;
@@ -986,24 +1024,39 @@ namespace AutoNAV
 
             // Default template = first preset (the user-spec example).
             string template = (cmbNamingTemplate.Items[0] as ComboBoxItem)?.Tag as string ?? "";
+
+            // AutoNAVismate workflow per Keith's spec (Nov 2026):
+            //   1. Group every test using the legacy proximity mode WITHOUT a
+            //      template (so groups get their legacy mode-derived names,
+            //      and any existing Walls/Floors groups from Function 5 keep
+            //      their names too).
+            //   2. Rename every resulting group EXCEPT those literally named
+            //      "Walls" or "Floors" using the default template.  This way
+            //      Function 5's output stays untouched and the rest of the
+            //      groups land on the project's standard naming convention.
             var newStatuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>
             {
                 Autodesk.Navisworks.Api.Clash.ClashResultStatus.New,
             };
-            var regroupStatuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
+            var noRegroup = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
 
             foreach (ClashTest test in tests)
             {
                 try
                 {
+                    // Step 1: legacy grouping (no template → legacy auto-names).
                     ClashGrouper.GroupClashes(
                         test,
-                        Function6PrimaryMode,    // proximity (GridIntersection)
-                        Function6SubGroupingMode, // no sub-mode
+                        Function6PrimaryMode,
+                        Function6SubGroupingMode,
                         keepExistingGroups: true,
-                        namingTemplate: template,
+                        namingTemplate: "",                // ← legacy names
                         newStatusFilter: newStatuses,
-                        regroupStatusFilter: regroupStatuses);
+                        regroupStatusFilter: noRegroup);
+
+                    // Step 2: rename every group in this test using the template,
+                    // excluding "Walls" / "Floors" groups (Function 5's output).
+                    RenameGroupsExcludingWallsFloors(test, template);
                 }
                 catch (Exception ex)
                 {
@@ -1042,6 +1095,219 @@ namespace AutoNAV
         private void SetStatus(string message)
         {
             txtStatus.Text = message;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Rename tab — TreeView-driven multi-rename
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Populates the treeRenameTargets TreeView with one TreeViewItem per
+        // clash test, each with a child item per ClashResultGroup.  Each row
+        // has a CheckBox so the user can pick any combination of tests and
+        // groups to rename.  Auto-refreshed on tab activation via
+        // OnRenameRefreshClick (also invoked from the Loaded handler).
+        private void LoadRenameTree()
+        {
+            if (treeRenameTargets == null) return;
+            treeRenameTargets.Items.Clear();
+
+            Document doc = NavApp.ActiveDocument;
+            if (doc == null) { SetRenameStatus("No active document."); return; }
+            DocumentClash documentClash = doc.GetClash();
+            if (documentClash == null || documentClash.TestsData == null)
+            {
+                SetRenameStatus("Clash Detective is not available.");
+                return;
+            }
+            var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
+            if (tests.Count == 0)
+            {
+                SetRenameStatus("No clash tests in the document yet — run Function 4 first.");
+                return;
+            }
+
+            foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
+            {
+                var testCb = new CheckBox { Content = test.DisplayName, FontWeight = FontWeights.SemiBold };
+                var testItem = new TreeViewItem
+                {
+                    Header = testCb,
+                    Tag = test,
+                    IsExpanded = false,
+                };
+                foreach (var child in test.Children)
+                {
+                    if (!(child is Autodesk.Navisworks.Api.Clash.ClashResultGroup grp)) continue;
+                    int childCount = grp.Children.Count;
+                    string label = $"{grp.DisplayName}  ({childCount} clash{(childCount == 1 ? "" : "es")})";
+                    var groupCb = new CheckBox { Content = label, FontSize = 11 };
+                    var groupItem = new TreeViewItem { Header = groupCb, Tag = new RenameTarget(test, grp) };
+                    testItem.Items.Add(groupItem);
+                }
+                treeRenameTargets.Items.Add(testItem);
+            }
+
+            SetRenameStatus($"{tests.Count} test(s) loaded.  Tick rows then click Rename Selected.");
+            UpdateRenamePreview();
+        }
+
+        // Tag payload for group-level tree items.
+        private class RenameTarget
+        {
+            public ClashTest Test { get; }
+            public Autodesk.Navisworks.Api.Clash.ClashResultGroup Group { get; }
+            public RenameTarget(ClashTest t, Autodesk.Navisworks.Api.Clash.ClashResultGroup g) { Test = t; Group = g; }
+        }
+
+        // Returns the active template string from either the preset dropdown
+        // or the custom textbox.
+        private string GetRenameTemplate()
+        {
+            var sel = cmbRenameTemplate?.SelectedItem as ComboBoxItem;
+            string tag = sel?.Tag as string;
+            if (string.Equals(tag, "__CUSTOM__", StringComparison.Ordinal))
+                return txtRenameCustomTemplate?.Text?.Trim() ?? "";
+            return tag ?? "";
+        }
+
+        private void UpdateRenamePreview()
+        {
+            if (txtRenamePreview == null) return;
+            string template = GetRenameTemplate();
+            if (string.IsNullOrEmpty(template))
+            {
+                txtRenamePreview.Text = "(no template selected)";
+                return;
+            }
+            string sample = template
+                .Replace("{Month}", "01")
+                .Replace("{Day}", "10")
+                .Replace("{Year}", "2027")
+                .Replace("{Level}", "L03")
+                .Replace("{Area}", "B8:C7")
+                .Replace("{TestName}", "ARCH vs STRC")
+                .Replace("{SelectionA}", "Railings")
+                .Replace("{SelectionB}", "Structural Framing")
+                .Replace("{#}", "1");
+            txtRenamePreview.Text = sample;
+        }
+
+        private void OnRenameTemplateChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateRenamePreview();
+        }
+
+        private void OnRenameRefreshClick(object sender, RoutedEventArgs e)
+        {
+            LoadRenameTree();
+        }
+
+        private void SetTreeCheckedState(bool value)
+        {
+            if (treeRenameTargets == null) return;
+            foreach (var i in treeRenameTargets.Items)
+            {
+                if (!(i is TreeViewItem tvi)) continue;
+                if (tvi.Header is CheckBox testCb) testCb.IsChecked = value;
+                foreach (var c in tvi.Items)
+                {
+                    if (c is TreeViewItem gtvi && gtvi.Header is CheckBox gcb) gcb.IsChecked = value;
+                }
+            }
+        }
+
+        private void OnRenameSelectAllClick(object sender, RoutedEventArgs e)  => SetTreeCheckedState(true);
+        private void OnRenameSelectNoneClick(object sender, RoutedEventArgs e) => SetTreeCheckedState(false);
+
+        private void SetRenameStatus(string msg) { if (txtRenameStatus != null) txtRenameStatus.Text = msg; }
+
+        // Apply the selected template to the user's chosen targets.
+        //   - If a test row is checked, every non-Walls/non-Floors group inside
+        //     it is renamed (Walls/Floors stay untouched).
+        //   - If only some groups under a test are checked, just those are
+        //     renamed.
+        //   - When "Keep existing group names" is checked, groups whose name
+        //     is non-empty and looks pre-existing (i.e. they have a current
+        //     DisplayName that doesn't equal the empty / placeholder default)
+        //     are preserved.  When unchecked, EVERY selected group plus any
+        //     ungrouped clashes inside selected tests get renamed.
+        private void OnRenameApplyClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string template = GetRenameTemplate();
+                if (string.IsNullOrWhiteSpace(template))
+                {
+                    MessageBox.Show("Pick a preset or enter a custom template before clicking Rename.",
+                        "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                if (treeRenameTargets == null || treeRenameTargets.Items.Count == 0)
+                {
+                    SetRenameStatus("No tests loaded — click Refresh.");
+                    return;
+                }
+
+                bool keepExisting = chkRenameKeepExisting?.IsChecked == true;
+
+                // Collect targets: { test → list of groups to rename }.
+                // A test-level check applies to every group under it; a group
+                // check is taken as-is.
+                var perTest = new Dictionary<ClashTest, List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>>();
+                foreach (var item in treeRenameTargets.Items)
+                {
+                    if (!(item is TreeViewItem tvi)) continue;
+                    var test = tvi.Tag as ClashTest;
+                    if (test == null) continue;
+
+                    bool testChecked = tvi.Header is CheckBox testCb && testCb.IsChecked == true;
+
+                    foreach (var c in tvi.Items)
+                    {
+                        if (!(c is TreeViewItem gtvi)) continue;
+                        if (!(gtvi.Tag is RenameTarget rt)) continue;
+                        bool groupChecked = gtvi.Header is CheckBox gcb && gcb.IsChecked == true;
+                        if (!testChecked && !groupChecked) continue;
+
+                        // When keep-existing is set, skip groups that already have a
+                        // meaningful name (not empty/whitespace).  Walls / Floors are
+                        // ALWAYS skipped because Function 5 owns those.
+                        string name = rt.Group.DisplayName?.Trim() ?? "";
+                        if (name.Equals("Walls",  StringComparison.OrdinalIgnoreCase)) continue;
+                        if (name.Equals("Floors", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (keepExisting && !string.IsNullOrEmpty(name)) continue;
+
+                        if (!perTest.TryGetValue(rt.Test, out var list))
+                        {
+                            list = new List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>();
+                            perTest[rt.Test] = list;
+                        }
+                        list.Add(rt.Group);
+                    }
+                }
+
+                if (perTest.Count == 0)
+                {
+                    SetRenameStatus("Nothing matched — tick some rows (and remember Walls/Floors are always preserved).");
+                    return;
+                }
+
+                int totalRenamed = 0;
+                foreach (var kv in perTest)
+                    totalRenamed += ClashGrouper.RenameGroupsWithTemplate(kv.Value, kv.Key, template);
+
+                SetRenameStatus($"Renamed {totalRenamed} group(s) across {perTest.Count} test(s).");
+                MessageBox.Show($"Renamed {totalRenamed} clash group(s).",
+                    "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Refresh the tree so the new names show.
+                LoadRenameTree();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Rename failed:\n\n" + ex.Message, "Rename Selected",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 }
