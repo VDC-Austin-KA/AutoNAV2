@@ -314,25 +314,36 @@ Foreground="#333333">
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 3: Rename clash groups -->
+            <!-- TAB 3: Rename clash groups (data-grid driven) -->
             <TabItem Header="Rename">
                 <DockPanel Margin="10" LastChildFill="True">
-                    <!-- TOP: instructions + template + keep-existing -->
+                    <!-- TOP: test selector + template controls + filter + counts -->
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <TextBlock Text="Rename Clash Groups" FontSize="16" FontWeight="Bold" Margin="0,0,0,6"/>
                         <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" Margin="0,0,0,10">
-                            Pick clash tests and / or individual clash groups on the left, choose a naming
-                            template, click "Rename Selected".  By default existing groups stay untouched
-                            unless you uncheck "Keep existing group names" — in which case selected groups
-                            (plus any ungrouped clashes inside a selected test) get renamed using the
-                            template.
+                            Pick a test (or "All tests"), choose a template, and review the live
+                            "Current → Proposed" mapping in the grid below.  Tick the rows you want
+                            renamed and click "Rename Selected".  Walls / Floors groups stay untouched
+                            regardless — Function 5 owns those.
                         </TextBlock>
 
-                        <Grid Margin="0,0,0,8">
+                        <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Test:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
+                            <ComboBox Name="cmbRenameTest" Grid.Column="1" Height="26" FontSize="11"
+                                      SelectionChanged="OnRenameTestChanged"/>
+                            <Button Grid.Column="2" Name="btnRenameRefresh" Content="Refresh" Click="OnRenameRefreshClick"
+                                    Padding="10,6" Margin="8,0,0,0" Background="#666666" Foreground="White" FontWeight="Bold" Width="80"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Preset:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
                             <ComboBox Name="cmbRenameTemplate" Grid.Column="1" Height="26" FontSize="11"
@@ -348,41 +359,76 @@ Foreground="#333333">
                                               Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
                                 <ComboBoxItem Content="(custom — use the text box below)" Tag="__CUSTOM__"/>
                             </ComboBox>
-                            <Button Grid.Column="2" Name="btnRenameRefresh" Content="Refresh" Click="OnRenameRefreshClick"
-                                    Padding="10,6" Margin="8,0,0,0" Background="#666666" Foreground="White" FontWeight="Bold" Width="80"/>
                         </Grid>
-
                         <TextBlock Text="Custom template (used when 'custom' preset is selected):" FontSize="10" Foreground="#888888" Margin="0,0,0,2"/>
                         <TextBox Name="txtRenameCustomTemplate" Height="26" FontSize="11"
                                  Text="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                 ToolTip="Available tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}"
+                                 ToolTip="Tokens listed below the textbox."
                                  Margin="0,0,0,4"
                                  TextChanged="OnRenameTemplateChanged"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,6">
-                            Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.  Rearrange / mix them however you like, or add plain text around them.
+                        <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,8">
+                            Tokens: {Month} {Day} {Year} {Time} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {#}.  Rearrange / mix them freely, or add plain text around them.
                         </TextBlock>
-                        <TextBlock Text="Preview:" FontSize="9" Foreground="#666666" Margin="0,0,0,2"/>
-                        <TextBlock Name="txtRenamePreview" FontSize="10" Foreground="#0078D4" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <CheckBox Name="chkRenameKeepExisting" Content="Keep existing group names (only rename newly-added or ungrouped clashes)" IsChecked="True" FontSize="10"/>
-                        </StackPanel>
+                        <!-- Filter row + counts -->
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Filter:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
+                            <ComboBox Name="cmbRenameFilter" Grid.Column="1" Height="26" FontSize="11"
+                                      SelectionChanged="OnRenameFilterChanged">
+                                <ComboBoxItem Content="All groups (excl. Walls/Floors)" Tag="all"  IsSelected="True"/>
+                                <ComboBoxItem Content="Groups whose current name already matches a known preset" Tag="preset"/>
+                                <ComboBoxItem Content="Groups with empty / default names only" Tag="empty"/>
+                                <ComboBoxItem Content="Include Walls / Floors (advanced)" Tag="all+wf"/>
+                            </ComboBox>
+                            <CheckBox Name="chkRenameKeepExisting" Grid.Column="2" Content="Keep existing names"
+                                      IsChecked="True" FontSize="10" VerticalAlignment="Center" Margin="12,0,0,0"
+                                      Checked="OnRenameKeepExistingChanged" Unchecked="OnRenameKeepExistingChanged"
+                                      ToolTip="When on: only rows whose Current Name is empty/whitespace get renamed. When off: every ticked row gets renamed."/>
+                        </Grid>
+
+                        <Border Background="#F4F8FE" BorderBrush="#0078D4" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,4">
+                            <TextBlock Name="txtRenameCounts" FontSize="11" Foreground="#0078D4" TextWrapping="Wrap"/>
+                        </Border>
                     </StackPanel>
 
-                    <!-- BOTTOM: action buttons -->
+                    <!-- BOTTOM: action buttons + status -->
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
                         <Button Name="btnRenameApply" Content="Rename Selected" Click="OnRenameApplyClick"
                                 Padding="14,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180"/>
-                        <Button Name="btnRenameSelectAll" Content="Select All Tests" Click="OnRenameSelectAllClick"
+                        <Button Name="btnRenameSelectAll" Content="Select All Rows" Click="OnRenameSelectAllClick"
                                 Padding="10,8" Margin="10,0,0,0" Background="#0078D4" Foreground="White" Width="140"/>
                         <Button Name="btnRenameSelectNone" Content="Clear Selection" Click="OnRenameSelectNoneClick"
                                 Padding="10,8" Margin="10,0,0,0" Background="#666666" Foreground="White" Width="140"/>
                         <TextBlock Name="txtRenameStatus" VerticalAlignment="Center" Margin="14,0,0,0" FontSize="11" Foreground="#0078D4"/>
                     </StackPanel>
 
-                    <!-- CENTER: tests / groups tree -->
+                    <!-- CENTER: DataGrid showing Current -> Proposed -->
                     <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3">
-                        <TreeView Name="treeRenameTargets" FontSize="11" Background="White"/>
+                        <DataGrid Name="dgRenameRows" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                  SelectionMode="Extended" SelectionUnit="FullRow" Background="White"
+                                  RowHeaderWidth="0" FontSize="11" AlternatingRowBackground="#FAFAFA">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="Sel" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
+                                <DataGridTextColumn Header="Test" Binding="{Binding TestName}" Width="180" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Current Name" Binding="{Binding CurrentName}" Width="*" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="→" Width="20" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Proposed Name" Binding="{Binding ProposedName}" Width="*" IsReadOnly="True">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#0078D4"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                                <DataGridTextColumn Header="Clashes" Binding="{Binding ClashCount}" Width="60" IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
                     </Border>
                 </DockPanel>
             </TabItem>

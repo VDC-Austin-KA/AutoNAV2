@@ -1098,65 +1098,190 @@ namespace AutoNAV
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // Rename tab — TreeView-driven multi-rename
+        // Rename tab — DataGrid-driven Current → Proposed preview
         // ─────────────────────────────────────────────────────────────────────
 
-        // Populates the treeRenameTargets TreeView with one TreeViewItem per
-        // clash test, each with a child item per ClashResultGroup.  Each row
-        // has a CheckBox so the user can pick any combination of tests and
-        // groups to rename.  Auto-refreshed on tab activation via
-        // OnRenameRefreshClick (also invoked from the Loaded handler).
+        // Public so the DataGrid's IsSelected column binding can write it.
+        public class RenameRow : System.ComponentModel.INotifyPropertyChanged
+        {
+            public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+            private bool _isSelected;
+            public bool IsSelected
+            {
+                get => _isSelected;
+                set
+                {
+                    if (_isSelected != value)
+                    {
+                        _isSelected = value;
+                        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected)));
+                        OnSelectionChanged?.Invoke();
+                    }
+                }
+            }
+
+            public string TestName { get; set; }
+            public string CurrentName { get; set; }
+            public string ProposedName { get; set; }
+            public int ClashCount { get; set; }
+
+            // Bookkeeping — not displayed in the grid.
+            public ClashTest Test { get; set; }
+            public Autodesk.Navisworks.Api.Clash.ClashResultGroup Group { get; set; }
+            public int GroupIndex { get; set; }
+            public bool IsWallsFloors { get; set; }
+            public string FirstResultStatus { get; set; }
+
+            // Fired by the row when its checkbox toggles so the parent window
+            // can refresh the counts panel.  Static so we don't need a back-
+            // pointer per row.
+            internal static Action OnSelectionChanged;
+        }
+
+        // The visible row list (bound to dgRenameRows.ItemsSource).
+        private readonly System.Collections.ObjectModel.ObservableCollection<RenameRow> _renameRows
+            = new System.Collections.ObjectModel.ObservableCollection<RenameRow>();
+
+        // The 5 preset template strings; index 0 is the default.  Used by the
+        // "matches a known preset" filter so we can fingerprint group names.
+        private static readonly string[] RenamePresetTemplates = new[]
+        {
+            "{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}",
+            "{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}",
+            "{TestName} | {Level}_{Area} {#}",
+            "{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}",
+        };
+
+        // Build the test ComboBox + initial row set.
         private void LoadRenameTree()
         {
-            if (treeRenameTargets == null) return;
-            treeRenameTargets.Items.Clear();
+            if (cmbRenameTest == null) return;
+
+            // Hook the row-selection callback once so the counts panel auto-updates.
+            RenameRow.OnSelectionChanged = UpdateRenameCounts;
+
+            // Bind the grid to the observable collection (idempotent).
+            if (dgRenameRows != null && dgRenameRows.ItemsSource == null)
+                dgRenameRows.ItemsSource = _renameRows;
+
+            // Populate the test selector.  Items hold the ClashTest in Tag.
+            cmbRenameTest.Items.Clear();
+            cmbRenameTest.Items.Add(new ComboBoxItem { Content = "All tests", Tag = null });
 
             Document doc = NavApp.ActiveDocument;
-            if (doc == null) { SetRenameStatus("No active document."); return; }
+            if (doc == null) { SetRenameStatus("No active document."); _renameRows.Clear(); UpdateRenameCounts(); return; }
             DocumentClash documentClash = doc.GetClash();
             if (documentClash == null || documentClash.TestsData == null)
             {
                 SetRenameStatus("Clash Detective is not available.");
+                _renameRows.Clear();
+                UpdateRenameCounts();
                 return;
             }
             var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
+            foreach (ClashTest t in ClashCompat.EnumerateTests(documentClash.TestsData))
+            {
+                cmbRenameTest.Items.Add(new ComboBoxItem { Content = t.DisplayName, Tag = t });
+            }
+            if (cmbRenameTest.SelectedIndex < 0) cmbRenameTest.SelectedIndex = 0;
+
             if (tests.Count == 0)
             {
                 SetRenameStatus("No clash tests in the document yet — run Function 4 first.");
+                _renameRows.Clear();
+                UpdateRenameCounts();
                 return;
             }
 
-            foreach (ClashTest test in ClashCompat.EnumerateTests(documentClash.TestsData))
+            SetRenameStatus($"{tests.Count} test(s) loaded.");
+            RebuildRenameRows();
+        }
+
+        // Rebuilds _renameRows for the currently-selected test (or all tests).
+        // Applies the filter + computes the proposed name for every row using
+        // the currently-selected template.
+        private void RebuildRenameRows()
+        {
+            if (dgRenameRows == null || cmbRenameTest == null) return;
+            _renameRows.Clear();
+
+            var selected = cmbRenameTest.SelectedItem as ComboBoxItem;
+            ClashTest scope = selected?.Tag as ClashTest;
+            string filter = (cmbRenameFilter?.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
+            string template = GetRenameTemplate();
+
+            Document doc = NavApp.ActiveDocument;
+            if (doc == null) { UpdateRenameCounts(); return; }
+            DocumentClash documentClash = doc.GetClash();
+            if (documentClash == null || documentClash.TestsData == null) { UpdateRenameCounts(); return; }
+
+            var testsToWalk = scope != null
+                ? new[] { scope }.AsEnumerable()
+                : ClashCompat.EnumerateTests(documentClash.TestsData);
+
+            // Single shared sequence counter scopes per-test so {#} restarts
+            // cleanly per test (matches Function 6 behaviour).
+            foreach (ClashTest test in testsToWalk)
             {
-                var testCb = new CheckBox { Content = test.DisplayName, FontWeight = FontWeights.SemiBold };
-                var testItem = new TreeViewItem
-                {
-                    Header = testCb,
-                    Tag = test,
-                    IsExpanded = false,
-                };
+                var seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                int idx = 0;
                 foreach (var child in test.Children)
                 {
                     if (!(child is Autodesk.Navisworks.Api.Clash.ClashResultGroup grp)) continue;
-                    int childCount = grp.Children.Count;
-                    string label = $"{grp.DisplayName}  ({childCount} clash{(childCount == 1 ? "" : "es")})";
-                    var groupCb = new CheckBox { Content = label, FontSize = 11 };
-                    var groupItem = new TreeViewItem { Header = groupCb, Tag = new RenameTarget(test, grp) };
-                    testItem.Items.Add(groupItem);
+                    idx++;
+
+                    string current = grp.DisplayName?.Trim() ?? "";
+                    bool isWf = current.Equals("Walls", StringComparison.OrdinalIgnoreCase)
+                             || current.Equals("Floors", StringComparison.OrdinalIgnoreCase);
+
+                    // Filter:
+                    if (filter == "all" && isWf) continue;
+                    if (filter == "preset" && !LooksLikePresetMatch(current)) continue;
+                    if (filter == "empty"  && !string.IsNullOrWhiteSpace(current)) continue;
+                    // "all+wf" keeps everything including Walls/Floors.
+
+                    // Compute the proposed name using ClashGrouper's helpers.
+                    string proposed = string.IsNullOrWhiteSpace(template)
+                        ? "(no template)"
+                        : ClashGrouper.ComputeProposedName(template, test, grp, idx, seq);
+
+                    _renameRows.Add(new RenameRow
+                    {
+                        IsSelected   = false,
+                        TestName     = test.DisplayName ?? "",
+                        CurrentName  = current,
+                        ProposedName = proposed,
+                        ClashCount   = CountClashResults(grp),
+                        Test         = test,
+                        Group        = grp,
+                        GroupIndex   = idx,
+                        IsWallsFloors= isWf,
+                    });
                 }
-                treeRenameTargets.Items.Add(testItem);
             }
 
-            SetRenameStatus($"{tests.Count} test(s) loaded.  Tick rows then click Rename Selected.");
-            UpdateRenamePreview();
+            UpdateRenameCounts();
         }
 
-        // Tag payload for group-level tree items.
-        private class RenameTarget
+        // Recursively counts ClashResult leaves under a group.
+        private static int CountClashResults(Autodesk.Navisworks.Api.Clash.ClashResultGroup grp)
         {
-            public ClashTest Test { get; }
-            public Autodesk.Navisworks.Api.Clash.ClashResultGroup Group { get; }
-            public RenameTarget(ClashTest t, Autodesk.Navisworks.Api.Clash.ClashResultGroup g) { Test = t; Group = g; }
+            int n = 0;
+            foreach (var c in grp.Children)
+            {
+                if (c is Autodesk.Navisworks.Api.Clash.ClashResult) n++;
+                else if (c is Autodesk.Navisworks.Api.Clash.ClashResultGroup nested) n += CountClashResults(nested);
+            }
+            return n;
+        }
+
+        // Heuristic: does this name look like one of our preset templates was
+        // applied?  We just check for a few unique-ish characters / tokens the
+        // presets always emit ('|' and ' vs ' both appear in every preset).
+        private static bool LooksLikePresetMatch(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            return name.Contains(" | ") || name.IndexOf(" vs ", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         // Returns the active template string from either the preset dropdown
@@ -1170,67 +1295,85 @@ namespace AutoNAV
             return tag ?? "";
         }
 
-        private void UpdateRenamePreview()
+        // Live recomputes ProposedName for every existing row when the template
+        // changes (without rebuilding the row list from scratch).  Faster than
+        // a full RebuildRenameRows when the user is typing.
+        private void RecomputeProposedNames()
         {
-            if (txtRenamePreview == null) return;
+            if (dgRenameRows == null) return;
             string template = GetRenameTemplate();
-            if (string.IsNullOrEmpty(template))
+            // Sequence counter is per-test so multiple visible tests don't
+            // share a sequence.
+            var perTestSeq = new Dictionary<ClashTest, Dictionary<string, int>>();
+            foreach (var row in _renameRows)
             {
-                txtRenamePreview.Text = "(no template selected)";
-                return;
-            }
-            string sample = template
-                .Replace("{Month}", "01")
-                .Replace("{Day}", "10")
-                .Replace("{Year}", "2027")
-                .Replace("{Level}", "L03")
-                .Replace("{Area}", "B8:C7")
-                .Replace("{TestName}", "ARCH vs STRC")
-                .Replace("{SelectionA}", "Railings")
-                .Replace("{SelectionB}", "Structural Framing")
-                .Replace("{#}", "1");
-            txtRenamePreview.Text = sample;
-        }
-
-        private void OnRenameTemplateChanged(object sender, RoutedEventArgs e)
-        {
-            UpdateRenamePreview();
-        }
-
-        private void OnRenameRefreshClick(object sender, RoutedEventArgs e)
-        {
-            LoadRenameTree();
-        }
-
-        private void SetTreeCheckedState(bool value)
-        {
-            if (treeRenameTargets == null) return;
-            foreach (var i in treeRenameTargets.Items)
-            {
-                if (!(i is TreeViewItem tvi)) continue;
-                if (tvi.Header is CheckBox testCb) testCb.IsChecked = value;
-                foreach (var c in tvi.Items)
+                if (!perTestSeq.TryGetValue(row.Test, out var seq))
                 {
-                    if (c is TreeViewItem gtvi && gtvi.Header is CheckBox gcb) gcb.IsChecked = value;
+                    seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    perTestSeq[row.Test] = seq;
                 }
+                row.ProposedName = string.IsNullOrWhiteSpace(template)
+                    ? "(no template)"
+                    : ClashGrouper.ComputeProposedName(template, row.Test, row.Group, row.GroupIndex, seq);
             }
+            // Force the grid to refresh ProposedName since the property isn't
+            // INotifyPropertyChanged-bound.
+            dgRenameRows.Items.Refresh();
+            UpdateRenameCounts();
         }
 
-        private void OnRenameSelectAllClick(object sender, RoutedEventArgs e)  => SetTreeCheckedState(true);
-        private void OnRenameSelectNoneClick(object sender, RoutedEventArgs e) => SetTreeCheckedState(false);
+        private void UpdateRenameCounts()
+        {
+            if (txtRenameCounts == null) return;
+            int total = _renameRows.Count;
+            int selected = _renameRows.Count(r => r.IsSelected);
+            int wallsFloors = _renameRows.Count(r => r.IsWallsFloors);
+            int eligible = 0;
+            int unchanged = 0;
+            bool keepExisting = chkRenameKeepExisting?.IsChecked == true;
+            foreach (var r in _renameRows)
+            {
+                if (r.IsWallsFloors) continue;
+                if (!r.IsSelected) { unchanged++; continue; }
+                if (keepExisting && !string.IsNullOrWhiteSpace(r.CurrentName)) { unchanged++; continue; }
+                eligible++;
+            }
+
+            int distinctTests = _renameRows.Select(r => r.Test).Distinct().Count();
+            txtRenameCounts.Text =
+                $"Visible rows: {total}   |   Ticked: {selected}   |   Will rename: {eligible}   |   " +
+                $"Will stay unchanged: {unchanged}   |   Walls/Floors preserved: {wallsFloors}   |   " +
+                $"Tests covered: {distinctTests}";
+        }
+
+        // ── Event handlers ──────────────────────────────────────────────────
+
+        private void OnRenameRefreshClick(object sender, RoutedEventArgs e) => LoadRenameTree();
+
+        private void OnRenameTestChanged(object sender, SelectionChangedEventArgs e) => RebuildRenameRows();
+
+        private void OnRenameFilterChanged(object sender, SelectionChangedEventArgs e) => RebuildRenameRows();
+
+        private void OnRenameKeepExistingChanged(object sender, RoutedEventArgs e) => UpdateRenameCounts();
+
+        private void OnRenameTemplateChanged(object sender, RoutedEventArgs e) => RecomputeProposedNames();
+
+        private void OnRenameSelectAllClick(object sender, RoutedEventArgs e)
+        {
+            foreach (var r in _renameRows) r.IsSelected = !r.IsWallsFloors;
+        }
+
+        private void OnRenameSelectNoneClick(object sender, RoutedEventArgs e)
+        {
+            foreach (var r in _renameRows) r.IsSelected = false;
+        }
 
         private void SetRenameStatus(string msg) { if (txtRenameStatus != null) txtRenameStatus.Text = msg; }
 
-        // Apply the selected template to the user's chosen targets.
-        //   - If a test row is checked, every non-Walls/non-Floors group inside
-        //     it is renamed (Walls/Floors stay untouched).
-        //   - If only some groups under a test are checked, just those are
-        //     renamed.
-        //   - When "Keep existing group names" is checked, groups whose name
-        //     is non-empty and looks pre-existing (i.e. they have a current
-        //     DisplayName that doesn't equal the empty / placeholder default)
-        //     are preserved.  When unchecked, EVERY selected group plus any
-        //     ungrouped clashes inside selected tests get renamed.
+        // Apply the selected template to every ticked row, respecting
+        // the keep-existing toggle.  Walls / Floors rows are always
+        // preserved (the IsWallsFloors guard mirrors what RebuildRenameRows
+        // already filters out — defensive double-check here too).
         private void OnRenameApplyClick(object sender, RoutedEventArgs e)
         {
             try
@@ -1242,53 +1385,32 @@ namespace AutoNAV
                         "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-                if (treeRenameTargets == null || treeRenameTargets.Items.Count == 0)
+                if (_renameRows.Count == 0)
                 {
-                    SetRenameStatus("No tests loaded — click Refresh.");
+                    SetRenameStatus("No rows to rename — click Refresh and pick a test.");
                     return;
                 }
 
                 bool keepExisting = chkRenameKeepExisting?.IsChecked == true;
 
-                // Collect targets: { test → list of groups to rename }.
-                // A test-level check applies to every group under it; a group
-                // check is taken as-is.
                 var perTest = new Dictionary<ClashTest, List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>>();
-                foreach (var item in treeRenameTargets.Items)
+                foreach (var r in _renameRows)
                 {
-                    if (!(item is TreeViewItem tvi)) continue;
-                    var test = tvi.Tag as ClashTest;
-                    if (test == null) continue;
+                    if (!r.IsSelected) continue;
+                    if (r.IsWallsFloors) continue;
+                    if (keepExisting && !string.IsNullOrWhiteSpace(r.CurrentName)) continue;
 
-                    bool testChecked = tvi.Header is CheckBox testCb && testCb.IsChecked == true;
-
-                    foreach (var c in tvi.Items)
+                    if (!perTest.TryGetValue(r.Test, out var list))
                     {
-                        if (!(c is TreeViewItem gtvi)) continue;
-                        if (!(gtvi.Tag is RenameTarget rt)) continue;
-                        bool groupChecked = gtvi.Header is CheckBox gcb && gcb.IsChecked == true;
-                        if (!testChecked && !groupChecked) continue;
-
-                        // When keep-existing is set, skip groups that already have a
-                        // meaningful name (not empty/whitespace).  Walls / Floors are
-                        // ALWAYS skipped because Function 5 owns those.
-                        string name = rt.Group.DisplayName?.Trim() ?? "";
-                        if (name.Equals("Walls",  StringComparison.OrdinalIgnoreCase)) continue;
-                        if (name.Equals("Floors", StringComparison.OrdinalIgnoreCase)) continue;
-                        if (keepExisting && !string.IsNullOrEmpty(name)) continue;
-
-                        if (!perTest.TryGetValue(rt.Test, out var list))
-                        {
-                            list = new List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>();
-                            perTest[rt.Test] = list;
-                        }
-                        list.Add(rt.Group);
+                        list = new List<Autodesk.Navisworks.Api.Clash.ClashResultGroup>();
+                        perTest[r.Test] = list;
                     }
+                    list.Add(r.Group);
                 }
 
                 if (perTest.Count == 0)
                 {
-                    SetRenameStatus("Nothing matched — tick some rows (and remember Walls/Floors are always preserved).");
+                    SetRenameStatus("Nothing matched — tick some rows (Walls/Floors are always preserved).");
                     return;
                 }
 
@@ -1300,8 +1422,8 @@ namespace AutoNAV
                 MessageBox.Show($"Renamed {totalRenamed} clash group(s).",
                     "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                // Refresh the tree so the new names show.
-                LoadRenameTree();
+                // Reload the rows to show new names.
+                RebuildRenameRows();
             }
             catch (Exception ex)
             {

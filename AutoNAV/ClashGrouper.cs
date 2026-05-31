@@ -677,6 +677,62 @@ namespace AutoNAV
 
         // Substitutes tokens. Empty values get a parameter-name placeholder so
         // every clash group ends up with a non-empty name (per the user spec:
+        // Public preview hook used by the Rename tab's DataGrid to compute the
+        // "Proposed Name" column for an existing group + clash test.  Mirrors
+        // the substitution ApplyTemplateToGroups does internally, plus extra
+        // tokens that are useful purely at preview time (ClashCount, Status,
+        // GroupIndex, Time).  Caller supplies the per-test sequence counter so
+        // {#} numbers are stable across the visible row set.
+        public static string ComputeProposedName(
+            string template,
+            ClashTest test,
+            ClashResultGroup group,
+            int groupIndex,
+            Dictionary<string, int> sequenceCounter)
+        {
+            if (string.IsNullOrWhiteSpace(template) || group == null) return "";
+
+            var ctx = BuildContext(group, test);
+
+            // Extra tokens beyond the substitution set the grouping pass uses.
+            string clashCount  = CountClashLeaves(group).ToString();
+            string status      = GetFirstClashStatus(group);
+            string groupIndexS = groupIndex.ToString();
+            string time        = DateTime.Now.ToString("HH:mm");
+
+            string baseName = ApplyNamingTemplate(template, ctx, sequenceCounter) ?? "";
+            return baseName
+                .Replace("{ClashCount}",  clashCount)
+                .Replace("{Status}",      status)
+                .Replace("{GroupIndex}",  groupIndexS)
+                .Replace("{Time}",        time);
+        }
+
+        private static int CountClashLeaves(ClashResultGroup g)
+        {
+            int n = 0;
+            foreach (var c in g.Children)
+            {
+                if (c is ClashResult) n++;
+                else if (c is ClashResultGroup nested) n += CountClashLeaves(nested);
+            }
+            return n;
+        }
+
+        private static string GetFirstClashStatus(ClashResultGroup g)
+        {
+            foreach (var c in g.Children)
+            {
+                if (c is ClashResult cr) return cr.Status.ToString();
+                if (c is ClashResultGroup nested)
+                {
+                    var s = GetFirstClashStatus(nested);
+                    if (!string.IsNullOrEmpty(s)) return s;
+                }
+            }
+            return "";
+        }
+
         // missing level → "LXX", missing area → "AREA").
         private static string ApplyNamingTemplate(string template, NamingContext ctx, Dictionary<string, int> sequenceCounter)
         {
