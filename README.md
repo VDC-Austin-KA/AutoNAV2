@@ -6,19 +6,28 @@ Automated Design Coordination plugin for Autodesk Navisworks Manage 2024 / 2025 
 
 Pick whichever works best for you:
 
-### Option A — Single-file `.cmd` (recommended; zero AV warnings)
+### Option A — Single-file `.cmd` (recommended; bypasses every Windows lockdown)
 
-Download **`AutoNAV-Setup.cmd`** (~1.1 MB, single plain-text file) and double-click.
+Download **`AutoNAV-Setup.cmd`** (~1.2 MB, single plain-text file) and double-click.
 
-This is one file. No companion `.ps1` needed. The `.cmd` carries the entire installer (per-version DLLs + install logic) as a base64-encoded PowerShell payload embedded at the bottom; on launch it extracts the payload to `%TEMP%`, runs it (self-elevating via UAC), and cleans up afterwards. Plain text — Windows SmartScreen, Defender, and Chrome safe-browsing never flag it.
+This is one file. No companion `.ps1` needed. The `.cmd`:
+
+1. Removes its own Mark-of-the-Web (`Zone.Identifier`) so SmartScreen won't quarantine it.
+2. Self-elevates via UAC.
+3. Extracts the embedded base64 PowerShell payload to `%TEMP%`.
+4. Invokes PowerShell on the payload as a **scriptblock string** (not via `-File`) so PowerShell's `ExecutionPolicy` — `Restricted` / `AllSigned` / etc. — **can never block it**. Only `-File` invocations are subject to that policy.
+5. Shows visible progress at every step (`[1/5]`, `[2/5]`, …) so a stalled run is diagnosable.
+6. Cleans up temp files.
+
+If you previously hit "this script is not digitally signed" with the `.ps1` installer or a blank-window stall with the old `.cmd`, this version is built specifically to bypass both. **No SmartScreen / AV warnings on download** because it's plain text.
 
 ### Option B — NSIS-built `.exe`
 
-Download **`AutoNAV-Setup.exe`** (~165 KB, built with NSIS) and double-click. NSIS is the same installer technology used by 7-Zip / OBS / Audacity / FileZilla etc., so the bootloader has long-standing reputation in most AV databases. The installer is still unsigned though, so SmartScreen *may* show a one-time "Windows protected your PC" prompt — if so, click **More info → Run anyway**.
+Download **`AutoNAV-Setup.exe`** (~168 KB, built with NSIS) and double-click. Same install behaviour. NSIS bootloaders have widespread AV reputation, but Windows may show a one-time "Windows protected your PC" prompt — click **More info → Run anyway**. If Defender quarantines it instead, use Option A.
 
 ### Option C — Two-file `.cmd` + `.ps1`
 
-Download both `Install-AutoNAV.cmd` and `Install-AutoNAV.ps1` and keep them in the same folder, then double-click the `.cmd`. Functionally identical to Option A but split across two files.
+Download both `Install-AutoNAV.cmd` and `Install-AutoNAV.ps1`, keep them in the same folder, double-click the `.cmd`. The `.ps1` now self-unblocks (`Unblock-File`) and re-launches itself via `-EncodedCommand` if elevation is needed, so the "not digitally signed" error from previous versions shouldn't recur. If it does, fall back to Option A.
 
 ### What either installer does
 
