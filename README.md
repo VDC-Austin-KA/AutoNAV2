@@ -4,30 +4,38 @@ Automated Design Coordination plugin for Autodesk Navisworks Manage 2024 / 2025 
 
 ## Install
 
-Pick whichever works best for you:
+Download **`AutoNAV-Plugin.zip`** (~225 KB) and extract anywhere. The folder will contain:
 
-### Option A — Single-file `.cmd` (recommended; bypasses every Windows lockdown)
+```
+AutoNAV-Plugin/
+    Install.cmd          ← run this
+    Uninstall.cmd
+    README.txt
+    V24/AutoNAV.dll      ← for Navisworks Manage 2024
+    V24/AutoNAV.addin
+    V25/…                ← for 2025
+    V26/…                ← for 2026
+    V27/…                ← for 2027
+```
 
-Download **`AutoNAV-Setup.cmd`** (~1.2 MB, single plain-text file) and double-click.
+Right-click **`Install.cmd`** → **Run as administrator** → confirm UAC. Done.
 
-This is one file. No companion `.ps1` needed. The `.cmd`:
+That's it — launch Navisworks → **Add-Ins ribbon tab** → **AutoNAV**.
 
-1. Removes its own Mark-of-the-Web (`Zone.Identifier`) so SmartScreen won't quarantine it.
-2. Self-elevates via UAC.
-3. Extracts the embedded base64 PowerShell payload to `%TEMP%`.
-4. Invokes PowerShell on the payload as a **scriptblock string** (not via `-File`) so PowerShell's `ExecutionPolicy` — `Restricted` / `AllSigned` / etc. — **can never block it**. Only `-File` invocations are subject to that policy.
-5. Shows visible progress at every step (`[1/5]`, `[2/5]`, …) so a stalled run is diagnosable.
-6. Cleans up temp files.
+### Why a ZIP and not a single .exe / .cmd
 
-If you previously hit "this script is not digitally signed" with the `.ps1` installer or a blank-window stall with the old `.cmd`, this version is built specifically to bypass both. **No SmartScreen / AV warnings on download** because it's plain text.
+Earlier releases shipped a single self-extracting `.cmd` and a NSIS `.exe`. Both reliably trip Windows Defender's heuristics for "self-extracting installer" — the same pattern is used by malware droppers (embedded base64 payload → `certutil -decode` → drop binaries → run). Defender flags it as a virus even though the contents are benign, and there's no honest fix short of paying for a code-signing certificate (~$200–700/year from DigiCert / Sectigo / Comodo).
 
-### Option B — NSIS-built `.exe`
+The ZIP approach sidesteps the problem entirely: the `.cmd` inside it does *only* `mkdir` and `copy` (the exact operations you'd do by hand in File Explorer), so it doesn't match any malware fingerprints. The DLLs travel as plain files. No base64, no `certutil`, no embedded executables. Standard Windows ZIPs aren't scanned heuristically the same way self-extracting installers are.
 
-Download **`AutoNAV-Setup.exe`** (~168 KB, built with NSIS) and double-click. Same install behaviour. NSIS bootloaders have widespread AV reputation, but Windows may show a one-time "Windows protected your PC" prompt — click **More info → Run anyway**. If Defender quarantines it instead, use Option A.
+### Fully manual install (no script at all)
 
-### Option C — Two-file `.cmd` + `.ps1`
+For each Navisworks Manage 2024 / 2025 / 2026 / 2027 you have:
 
-Download both `Install-AutoNAV.cmd` and `Install-AutoNAV.ps1`, keep them in the same folder, double-click the `.cmd`. The `.ps1` now self-unblocks (`Unblock-File`) and re-launches itself via `-EncodedCommand` if elevation is needed, so the "not digitally signed" error from previous versions shouldn't recur. If it does, fall back to Option A.
+1. Create `C:\Program Files\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\` (you'll need admin rights).
+2. Copy `AutoNAV.dll` and `AutoNAV.addin` from the matching `V<yy>/` folder in the ZIP into that `AutoNAV\` folder.
+
+Restart Navisworks. Done.
 
 ### What either installer does
 
