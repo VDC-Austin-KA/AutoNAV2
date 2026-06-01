@@ -196,8 +196,7 @@ namespace AutoNAV
                         : "Auto-run failed — open Clash Detective and click \"Update All\" manually."),
                     createdCount, skippedCount, failedCount, createdCount + skippedCount + failedCount, runCount);
 
-                MessageBox.Show(summary, "Function 4 - Clash Generation Results",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Notifier.Info(summary);
             }
             catch (Exception ex)
             {
@@ -353,8 +352,7 @@ namespace AutoNAV
                 string summary = string.Format("Clash Test Generation (Precursor Grouping) Complete\n\nCreated: {0}\nSkipped: {1}\nFailed: {2}\nGrouped (Floors/Walls): {3}\n\nTotal: {4}\n\nYour clash tests are now ready for execution in Clash Detective.",
                     createdCount, skippedCount, failedCount, groupedCount, createdCount + skippedCount + failedCount);
 
-                MessageBox.Show(summary, "Function 5 - Clash Generation Results",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Notifier.Info(summary);
             }
             catch (Exception ex)
             {
@@ -567,8 +565,7 @@ namespace AutoNAV
                     "Check Clash Detective to see the grouped results.",
                     totalTests, floorsCount, wallsCount, totalGrouped);
 
-                MessageBox.Show(summary, "Function 5 - Groups Created",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Notifier.Info(summary);
             }
             catch (Exception ex)
             {
@@ -855,8 +852,7 @@ namespace AutoNAV
 
         private void ShowError(string message)
         {
-            MessageBox.Show(message, "Error",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Notifier.Error(message);
             LogMessage(string.Format("ERROR: {0}", message));
         }
 
