@@ -25,6 +25,25 @@ namespace AutoNAV
             _searchSetGenerator = new SearchSetGenerator();
             _clashEngine = new ClashTestGeneratorEngine();
             _currentPropertyCategories = new List<SearchSetGenerator.PropertyCategoryInfo>();
+
+            // Route notifications from non-UI classes (SearchSetGenerator,
+            // ClashTestGeneratorEngine, ClashGrouper) through the status panel
+            // so they don't have to MessageBox.Show their own popups.
+            Notifier.Sink = (msg, level, body) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    switch (level)
+                    {
+                        case NotifyLevel.Success: NotifySuccess(msg); break;
+                        case NotifyLevel.Warning: NotifyWarning(msg); break;
+                        case NotifyLevel.Error:   NotifyError(msg);   break;
+                        case NotifyLevel.Result:  NotifyResult(msg, body); break;
+                        default:                  NotifyInfo(msg);    break;
+                    }
+                });
+            };
+
             Loaded += MainWindow_Loaded;
         }
 
@@ -234,10 +253,7 @@ namespace AutoNAV
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 1:\n\n" + ex.Message,
-                    "Function 1 Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                NotifyError("Error in Function 1:\n\n" + ex.Message);
             }
         }
 
@@ -249,8 +265,7 @@ namespace AutoNAV
 
                 if (selectedProps.Count == 0)
                 {
-                    MessageBox.Show("Please select at least one discipline.", "Function 2",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Please select at least one discipline.");
                     return;
                 }
 
@@ -268,15 +283,11 @@ namespace AutoNAV
                     SearchSetGenerator.GenerateFunction2SearchSets(discs, propCat, propName);
                 }
 
-                MessageBox.Show("Function 2 complete.", "Function 2",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo("Function 2 complete.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 2:\n\n" + ex.Message,
-                    "Function 2 Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                NotifyError("Error in Function 2:\n\n" + ex.Message);
             }
         }
 
@@ -294,8 +305,7 @@ namespace AutoNAV
 
                 if (string.IsNullOrEmpty(discipline) || string.IsNullOrEmpty(category) || string.IsNullOrEmpty(propTag))
                 {
-                    MessageBox.Show("Please select a discipline, property category, and property name.",
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Please select a discipline, property category, and property name.");
                     return;
                 }
 
@@ -309,8 +319,7 @@ namespace AutoNAV
             catch (Exception ex)
             {
                 SetStatus("Function 3 failed.");
-                MessageBox.Show("Error in Function 3:\n\n" + ex.Message, "Function 3 Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error in Function 3:\n\n" + ex.Message);
             }
         }
 
@@ -418,10 +427,7 @@ namespace AutoNAV
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error generating clash tests:\n\n" + ex.Message,
-                    "Function 4 - Clash Generation Error",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                NotifyError("Error generating clash tests:\n\n" + ex.Message);
             }
         }
 
@@ -433,9 +439,7 @@ namespace AutoNAV
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error running clash tests and grouping results:\n\n" + ex.Message,
-                    "Function 5 - Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error running clash tests and grouping results:\n\n" + ex.Message);
             }
         }
 
@@ -447,21 +451,15 @@ namespace AutoNAV
         {
             try
             {
-                MessageBox.Show(
-                    "To run clash tests, please use the Clash Detective pane in Navisworks:\n\n" +
+                NotifyInfo("To run clash tests, please use the Clash Detective pane in Navisworks:\n\n" +
                     "1. Open the Clash Detective pane\n" +
                     "2. Select the tests you want to run\n" +
                     "3. Click 'Run Tests' button\n\n" +
-                    "The Group Clashes feature can then be used to organize the results.",
-                    "Update All Tests",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    "The Group Clashes feature can then be used to organize the results.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error:\n\n" + ex.Message,
-                    "Update All Tests Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error:\n\n" + ex.Message);
             }
         }
 
@@ -518,14 +516,12 @@ namespace AutoNAV
                 string result = ClashGrouper.GroupAllTestsByWallsAndFloors();
                 SetStatus("Function 6 complete.");
 
-                MessageBox.Show(result, "Function 6 — Complete",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo(result);
             }
             catch (Exception ex)
             {
                 SetStatus("Function 6 failed.");
-                MessageBox.Show("Error in Function 6:\n\n" + ex.Message,
-                    "Function 6 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error in Function 6:\n\n" + ex.Message);
             }
         }
 
@@ -562,8 +558,7 @@ namespace AutoNAV
             var modes = GetFunction7Modes(out string error);
             if (error != null)
             {
-                MessageBox.Show(error, "Function 7 — Manual Grouping",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                NotifyWarning(error);
                 return;
             }
             GroupSingleTest("Function 7 — Manual Grouping", modes.primary, modes.sub);
@@ -575,8 +570,7 @@ namespace AutoNAV
             var modes = GetFunction7Modes(out string error);
             if (error != null)
             {
-                MessageBox.Show(error, "Function 7 — Manual Grouping",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                NotifyWarning(error);
                 return;
             }
             GroupAllTestsCore("Function 7 — Manual Grouping", modes.primary, modes.sub);
@@ -606,21 +600,20 @@ namespace AutoNAV
 
                 if (string.IsNullOrEmpty(testName))
                 {
-                    MessageBox.Show("Please select a clash test to group.", caption,
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Please select a clash test to group.");
                     return;
                 }
 
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("No active document found.");
                     return;
                 }
                 DocumentClash documentClash = doc.GetClash();
                 if (documentClash == null)
                 {
-                    MessageBox.Show("Clash Detective is not available.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("Clash Detective is not available.");
                     return;
                 }
 
@@ -631,7 +624,7 @@ namespace AutoNAV
                 }
                 if (selectedTest == null)
                 {
-                    MessageBox.Show("Clash test not found: " + testName, caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("Clash test not found: " + testName);
                     return;
                 }
 
@@ -652,13 +645,11 @@ namespace AutoNAV
                 if (!string.IsNullOrWhiteSpace(template))
                     RenameGroupsExcludingWallsFloors(selectedTest, template);
 
-                MessageBox.Show("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.",
-                    caption, MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo("Clashes grouped successfully!\n\nCheck Clash Detective to see the results.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error grouping clashes:\n\n" + ex.Message, caption,
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error grouping clashes:\n\n" + ex.Message);
             }
         }
 
@@ -670,20 +661,20 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("No active document found.");
                     return;
                 }
                 DocumentClash documentClash = doc.GetClash();
                 if (documentClash == null)
                 {
-                    MessageBox.Show("Clash Detective is not available.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("Clash Detective is not available.");
                     return;
                 }
 
                 var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
                 if (tests.Count == 0)
                 {
-                    MessageBox.Show("No clash tests found.", caption, MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("No clash tests found.");
                     return;
                 }
 
@@ -714,13 +705,11 @@ namespace AutoNAV
                     }
                 }
 
-                MessageBox.Show($"Grouping complete!\n\nTests Grouped: {groupedCount}\nFailed: {failedCount}",
-                    caption, MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo($"Grouping complete!\n\nTests Grouped: {groupedCount}\nFailed: {failedCount}");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error:\n\n" + ex.Message, caption,
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error:\n\n" + ex.Message);
             }
         }
 
@@ -733,22 +722,21 @@ namespace AutoNAV
 
                 if (string.IsNullOrEmpty(testName))
                 {
-                    MessageBox.Show("Please select a clash test to ungroup.", "Ungroup Clashes",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Please select a clash test to ungroup.");
                     return;
                 }
 
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("No active document found.");
                     return;
                 }
 
                 DocumentClash documentClash = doc.GetClash();
                 if (documentClash == null)
                 {
-                    MessageBox.Show("Clash Detective is not available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("Clash Detective is not available.");
                     return;
                 }
 
@@ -764,19 +752,17 @@ namespace AutoNAV
 
                 if (selectedTest == null)
                 {
-                    MessageBox.Show("Clash test not found: " + testName, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    NotifyError("Clash test not found: " + testName);
                     return;
                 }
 
                 ClashGrouper.UnGroupClashes(selectedTest);
 
-                MessageBox.Show("Clashes have been ungrouped (reset to individual results).",
-                    "Ungroup Clashes", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo("Clashes have been ungrouped (reset to individual results).");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error:\n\n" + ex.Message, "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Error:\n\n" + ex.Message);
             }
         }
 
@@ -870,16 +856,14 @@ namespace AutoNAV
                 string template = GetSelectedNamingTemplate();
                 if (string.IsNullOrWhiteSpace(template))
                 {
-                    MessageBox.Show("Pick a naming template from the dropdown first.", "Rename Selected",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Pick a naming template from the dropdown first.");
                     return;
                 }
 
                 var pairs = ClashGrouper.GetSelectedClashGroups();
                 if (pairs.Count == 0)
                 {
-                    MessageBox.Show("No clash groups found in the document.", "Rename Selected",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    NotifyInfo("No clash groups found in the document.");
                     return;
                 }
 
@@ -892,13 +876,11 @@ namespace AutoNAV
                     totalRenamed += ClashGrouper.RenameGroupsWithTemplate(groups, byTest.Key, template);
                 }
 
-                MessageBox.Show($"Renamed {totalRenamed} clash group(s) with the current template.",
-                    "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo($"Renamed {totalRenamed} clash group(s) with the current template.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Rename failed:\n\n" + ex.Message, "Rename Selected",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Rename failed:\n\n" + ex.Message);
             }
         }
 
@@ -940,41 +922,34 @@ namespace AutoNAV
                 }
                 if (!clashRunOk)
                 {
-                    var choice = MessageBox.Show(
-                        "Function 4 couldn't run the clash tests automatically.\n\n" +
-                        "Open Navisworks' Clash Detective panel and click 'Update All' on the Home tab, then click OK to continue. Cancel to abort AutoNAVismate.",
-                        "AutoNAVismate — manual step required",
-                        MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-                    if (choice != MessageBoxResult.OK)
-                    {
-                        SetAutoProgress("Aborted by user before Function 5.");
-                        return;
-                    }
+                    // No popup interrupts the workflow.  We just log the issue
+                    // to the status panel and continue — Functions 5 & 6 will
+                    // simply find no clash results if tests didn't actually
+                    // run, which is fine.
+                    NotifyWarning("AutoNAVismate: Function 4 auto-run failed. Open Clash Detective and click \"Update All\" after the workflow finishes if results are empty.");
                 }
 
                 SetAutoProgress("Step 4/5  Function 5 — grouping Walls / Floors…");
                 try
                 {
                     string summary = ClashGrouper.GroupAllTestsByWallsAndFloors();
-                    System.Diagnostics.Debug.WriteLine("[AutoNAV] " + summary);
+                    NotifyResult("Function 5 — Walls / Floors grouping", summary);
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine("[AutoNAV] AutoNAVismate Function 5 failed: " + ex.Message);
+                    NotifyError("Function 5 failed: " + ex.Message);
                 }
 
                 SetAutoProgress("Step 5/5  Function 6 — grouping + naming remaining clashes…");
                 RunFunction6WithDefaults();
 
                 SetAutoProgress("AutoNAVismate complete. Open Clash Detective to review.");
-                MessageBox.Show("AutoNAVismate finished.\n\nAll five steps ran. Check Clash Detective for results.",
-                    "AutoNAVismate", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifySuccess("AutoNAVismate finished — all five steps ran. Open Clash Detective to review results.");
             }
             catch (Exception ex)
             {
                 SetAutoProgress("Fatal error: " + ex.Message);
-                MessageBox.Show("AutoNAVismate hit a fatal error:\n\n" + ex.Message,
-                    "AutoNAVismate", MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("AutoNAVismate hit a fatal error: " + ex.Message);
             }
             finally
             {
@@ -1095,6 +1070,54 @@ namespace AutoNAV
         private void SetStatus(string message)
         {
             txtStatus.Text = message;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // In-app status panel — replaces MessageBox popups so the user isn't
+        // constantly clicking OK to dismiss notifications.  Three flavours:
+        //
+        //   NotifyInfo    — neutral info, dark-blue text
+        //   NotifySuccess — green tick, useful for "finished" messages
+        //   NotifyError   — red, for the rare hard failure
+        //   NotifyResult  — multi-line summary (e.g. clash-grouping counts)
+        //
+        // All append to txtAppStatus and auto-scroll to the bottom; the user
+        // can click "Clear" in the footer to reset the panel.
+        // ─────────────────────────────────────────────────────────────────────
+
+        private void NotifyInfo(string message)    => AppendStatus(message, System.Windows.Media.Brushes.DarkBlue);
+        private void NotifySuccess(string message) => AppendStatus("✓ " + message, System.Windows.Media.Brushes.DarkGreen);
+        private void NotifyError(string message)   => AppendStatus("✗ " + message, System.Windows.Media.Brushes.DarkRed);
+        private void NotifyWarning(string message) => AppendStatus("⚠ " + message, System.Windows.Media.Brushes.DarkOrange);
+        // Multi-line summary panel — preserves \n formatting for things like
+        // grouping counts ("Tests grouped: 5\nFailed: 0").
+        private void NotifyResult(string title, string body)
+        {
+            AppendStatus(title, System.Windows.Media.Brushes.DarkBlue);
+            if (!string.IsNullOrWhiteSpace(body))
+                AppendStatus("    " + body.Replace("\n", "\n    "), System.Windows.Media.Brushes.Black);
+        }
+
+        private void AppendStatus(string message, System.Windows.Media.Brush color)
+        {
+            if (txtAppStatus == null) return;
+            string stamp = DateTime.Now.ToString("HH:mm:ss");
+            var run = new System.Windows.Documents.Run("[" + stamp + "] " + message + Environment.NewLine)
+            {
+                Foreground = color,
+            };
+            txtAppStatus.Inlines.Add(run);
+            // auto-scroll to bottom
+            svAppStatus?.ScrollToBottom();
+            // also mirror the latest line to the small secondary status text so
+            // the user sees the most recent message at a glance.
+            SetStatus(message.Length > 80 ? message.Substring(0, 80) + "…" : message);
+        }
+
+        private void OnStatusClearClick(object sender, RoutedEventArgs e)
+        {
+            txtAppStatus?.Inlines.Clear();
+            SetStatus("");
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -1381,8 +1404,7 @@ namespace AutoNAV
                 string template = GetRenameTemplate();
                 if (string.IsNullOrWhiteSpace(template))
                 {
-                    MessageBox.Show("Pick a preset or enter a custom template before clicking Rename.",
-                        "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    NotifyWarning("Pick a preset or enter a custom template before clicking Rename.");
                     return;
                 }
                 if (_renameRows.Count == 0)
@@ -1419,16 +1441,14 @@ namespace AutoNAV
                     totalRenamed += ClashGrouper.RenameGroupsWithTemplate(kv.Value, kv.Key, template);
 
                 SetRenameStatus($"Renamed {totalRenamed} group(s) across {perTest.Count} test(s).");
-                MessageBox.Show($"Renamed {totalRenamed} clash group(s).",
-                    "Rename Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                NotifyInfo($"Renamed {totalRenamed} clash group(s).");
 
                 // Reload the rows to show new names.
                 RebuildRenameRows();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Rename failed:\n\n" + ex.Message, "Rename Selected",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                NotifyError("Rename failed:\n\n" + ex.Message);
             }
         }
     }

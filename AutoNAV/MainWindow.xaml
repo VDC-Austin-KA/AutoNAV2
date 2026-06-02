@@ -17,12 +17,20 @@ Foreground="#333333">
             </StackPanel>
         </Border>
 
-        <!-- FOOTER -->
-        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="10,8" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="AutoNAV v3.0 | Navisworks 2024/2025/2026" FontSize="10" Foreground="#666666" VerticalAlignment="Center"/>
-                <TextBlock Name="txtStatus" FontSize="10" Foreground="#0078D4" Margin="15,0,0,0" VerticalAlignment="Center"/>
-            </StackPanel>
+        <!-- FOOTER (status panel — shows the messages that used to be MessageBox popups) -->
+        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="10,6" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0" MinHeight="60">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="10,0,0,0">
+                    <TextBlock Text="AutoNAV v3.7 | Navisworks 2024-2027" FontSize="10" Foreground="#666666" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,4,0,0">
+                    <Button Name="btnStatusClear" Content="Clear" Click="OnStatusClearClick" Padding="6,2" FontSize="9" Background="Transparent" BorderBrush="#D0D0D0"/>
+                    <TextBlock Name="txtStatus" FontSize="9" Foreground="#888888" Margin="10,4,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <ScrollViewer Name="svAppStatus" VerticalScrollBarVisibility="Auto" MaxHeight="120">
+                    <TextBlock Name="txtAppStatus" FontSize="11" TextWrapping="Wrap" Padding="2,0,2,0"/>
+                </ScrollViewer>
+            </DockPanel>
         </Border>
 
         <!-- MAIN CONTENT - TABS -->

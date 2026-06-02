@@ -126,16 +126,14 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No active document found.");
                     return;
                 }
 
                 DocumentModels models = doc.Models;
                 if (models.Count == 0)
                 {
-                    MessageBox.Show("No models are loaded in the current document.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No models are loaded in the current document.");
                     return;
                 }
 
@@ -155,8 +153,7 @@ namespace AutoNAV
                 var picks = ClassifyFiles(allFileNames);
                 if (picks.Count == 0)
                 {
-                    MessageBox.Show("Could not derive discipline patterns from the loaded model names.",
-                        "Function 1", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("Could not derive discipline patterns from the loaded model names.");
                     return;
                 }
 
@@ -240,8 +237,7 @@ namespace AutoNAV
                 GroupItem root = selSets.RootItem as GroupItem;
                 if (root == null)
                 {
-                    MessageBox.Show("Cannot access selection sets.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Cannot access selection sets.");
                     return;
                 }
 
@@ -256,9 +252,7 @@ namespace AutoNAV
 
                 if (discFolder == null)
                 {
-                    MessageBox.Show(
-                        "Failed to create '" + DISCIPLINES_FOLDER + "' folder.\n\nEnsure a model is open.",
-                        "Function 1", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Failed to create '" + DISCIPLINES_FOLDER + "' folder.\n\nEnsure a model is open.");
                     return;
                 }
 
@@ -314,13 +308,11 @@ namespace AutoNAV
                 if (allFileNames.Count > 0 && allFileNames.Count <= 20)
                     msg += "\n\nFiles: " + string.Join(", ", allFileNames);
 
-                MessageBox.Show(msg, "Function 1 — Diagnostic",
-                    MessageBoxButton.OK, created > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                Notifier.Warning(msg);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 1:\n\n" + ex.Message + "\n\n" + ex.StackTrace,
-                    "Function 1 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error("Error in Function 1:\n\n" + ex.Message + "\n\n" + ex.StackTrace);
             }
         }
 
@@ -336,8 +328,7 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 2",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No active document found.");
                     return;
                 }
 
@@ -357,8 +348,7 @@ namespace AutoNAV
 
                 if (disciplines.Count == 0)
                 {
-                    MessageBox.Show("No disciplines found. Run Function 1 first.", "Function 2",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No disciplines found. Run Function 1 first.");
                     return;
                 }
 
@@ -367,8 +357,7 @@ namespace AutoNAV
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 2:\n\n" + ex.Message, "Function 2 Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error("Error in Function 2:\n\n" + ex.Message);
             }
         }
 
@@ -381,8 +370,7 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 2",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("No active document found.");
                     return;
                 }
 
@@ -399,8 +387,7 @@ namespace AutoNAV
 
                 if (clashFolder == null)
                 {
-                    MessageBox.Show("Failed to create '" + CLASH_SETS_FOLDER + "' folder.",
-                        "Function 2", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Failed to create '" + CLASH_SETS_FOLDER + "' folder.");
                     return;
                 }
 
@@ -408,8 +395,7 @@ namespace AutoNAV
                 FolderItem discSourceFolder = FindFolder(root, DISCIPLINES_FOLDER);
                 if (discSourceFolder == null)
                 {
-                    MessageBox.Show("'" + DISCIPLINES_FOLDER + "' folder not found.\nRun Function 1 first.",
-                        "Function 2", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("'" + DISCIPLINES_FOLDER + "' folder not found.\nRun Function 1 first.");
                     return;
                 }
 
@@ -522,13 +508,11 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
 
-                MessageBox.Show(msg, "Function 2 — Results",
-                    MessageBoxButton.OK, totalCreated > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                Notifier.Warning(msg);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 2:\n\n" + ex.Message + "\n\n" + ex.StackTrace,
-                    "Function 2 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error("Error in Function 2:\n\n" + ex.Message + "\n\n" + ex.StackTrace);
             }
         }
 
@@ -542,8 +526,7 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 3",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No active document found.");
                     return;
                 }
 
@@ -594,13 +577,11 @@ namespace AutoNAV
                     sb.AppendLine(string.Format("[MISSING] '{0}' — run Function 2 first.", CLASH_SETS_FOLDER));
                 }
 
-                MessageBox.Show(sb.ToString(), "Function 3 — Validation Complete",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                Notifier.Info(sb.ToString());
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 3:\n\n" + ex.Message,
-                    "Function 3 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error("Error in Function 3:\n\n" + ex.Message);
             }
         }
 
@@ -1020,15 +1001,13 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No active document found.");
                     return;
                 }
 
                 if (patternGroups == null || patternGroups.Count == 0)
                 {
-                    MessageBox.Show("No discipline patterns to create.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No discipline patterns to create.");
                     return;
                 }
 
@@ -1036,8 +1015,7 @@ namespace AutoNAV
                 GroupItem root = selSets.RootItem as GroupItem;
                 if (root == null)
                 {
-                    MessageBox.Show("Cannot access selection sets.", "Function 1",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Cannot access selection sets.");
                     return;
                 }
 
@@ -1051,9 +1029,7 @@ namespace AutoNAV
 
                 if (discFolder == null)
                 {
-                    MessageBox.Show(
-                        "Failed to create '" + DISCIPLINES_FOLDER + "' folder.\n\nEnsure a model is open.",
-                        "Function 1", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Failed to create '" + DISCIPLINES_FOLDER + "' folder.\n\nEnsure a model is open.");
                     return;
                 }
 
@@ -1103,13 +1079,11 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nErrors:\n" + string.Join("\n", errors);
 
-                MessageBox.Show(msg, "Function 1 — Results",
-                    MessageBoxButton.OK, created > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                Notifier.Warning(msg);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error in Function 1:\n\n" + ex.Message + "\n\n" + ex.StackTrace,
-                    "Function 1 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error("Error in Function 1:\n\n" + ex.Message + "\n\n" + ex.StackTrace);
             }
         }
 
@@ -1322,8 +1296,7 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null)
                 {
-                    MessageBox.Show("No active document found.", "Function 3",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning("No active document found.");
                     return;
                 }
 
@@ -1331,16 +1304,14 @@ namespace AutoNAV
                 GroupItem root = selSets.RootItem as GroupItem;
                 if (root == null)
                 {
-                    MessageBox.Show("Cannot access selection sets.", "Function 3",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Cannot access selection sets.");
                     return;
                 }
 
                 FolderItem discSourceFolder = FindFolder(root, DISCIPLINES_FOLDER);
                 if (discSourceFolder == null)
                 {
-                    MessageBox.Show(string.Format("'{0}' folder not found.\nRun Function 1 first.", DISCIPLINES_FOLDER),
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning(string.Format("'{0}' folder not found.\nRun Function 1 first.", DISCIPLINES_FOLDER));
                     return;
                 }
 
@@ -1356,24 +1327,21 @@ namespace AutoNAV
 
                 if (discSearchSet == null)
                 {
-                    MessageBox.Show(string.Format("Discipline '{0}' not found in {1}.", discipline, DISCIPLINES_FOLDER),
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning(string.Format("Discipline '{0}' not found in {1}.", discipline, DISCIPLINES_FOLDER));
                     return;
                 }
 
                 SelectionSource discSource = selSets.CreateSelectionSource(discSearchSet);
                 if (discSource == null)
                 {
-                    MessageBox.Show("Failed to create selection source for discipline.",
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Failed to create selection source for discipline.");
                     return;
                 }
 
                 List<string> values = GetPropertyValuesForDiscipline(discipline, propCategory, propName);
                 if (values.Count == 0)
                 {
-                    MessageBox.Show(string.Format("No values found for property '{0}/{1}' in discipline '{2}'.", propCategory, propName, discipline),
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Notifier.Warning(string.Format("No values found for property '{0}/{1}' in discipline '{2}'.", propCategory, propName, discipline));
                     return;
                 }
 
@@ -1387,8 +1355,7 @@ namespace AutoNAV
 
                 if (clashFolder == null)
                 {
-                    MessageBox.Show(string.Format("Failed to access '{0}' folder.", CLASH_SETS_FOLDER),
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error(string.Format("Failed to access '{0}' folder.", CLASH_SETS_FOLDER));
                     return;
                 }
 
@@ -1404,8 +1371,7 @@ namespace AutoNAV
 
                 if (customFolder == null)
                 {
-                    MessageBox.Show("Failed to create custom search set folder.",
-                        "Function 3", MessageBoxButton.OK, MessageBoxImage.Error);
+                    Notifier.Error("Failed to create custom search set folder.");
                     return;
                 }
 
@@ -1457,13 +1423,11 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nErrors:\n" + string.Join("\n", errors);
 
-                MessageBox.Show(msg, "Function 3 - Custom Search Sets",
-                    MessageBoxButton.OK, created > 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                Notifier.Warning(msg);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("Error in Function 3:\n\n{0}\n\n{1}", ex.Message, ex.StackTrace),
-                    "Function 3 Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                Notifier.Error(string.Format("Error in Function 3:\n\n{0}\n\n{1}", ex.Message, ex.StackTrace));
             }
         }
     }
