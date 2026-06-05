@@ -1,196 +1,653 @@
+<Window x:Class="AutoNAV.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AutoNAV"
+        Height="780"
+        Width="1080"
+        MinHeight="600"
+        MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="#F4F6F9"
+        TextOptions.TextFormattingMode="Display"
+        FontFamily="Segoe UI"
+        FontSize="13">
 
-  <Window x:Class="AutoNAV.MainWindow"
-xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-Title="AutoNAV"
-Height="650"
-Width="900"
-WindowStartupLocation="CenterScreen"
-Background="#F5F5F5"
-Foreground="#333333">
-    <DockPanel LastChildFill="True">
-        <!-- HEADER -->
-        <Border DockPanel.Dock="Top" Background="#0078D4" Padding="20">
-            <StackPanel>
-                <TextBlock Text="AutoNAV" FontSize="24" FontWeight="Bold" Foreground="White"/>
-                <TextBlock Text="Automated Design Coordination Plugin" FontSize="12" Foreground="#E0E0E0" Margin="0,5,0,0"/>
-            </StackPanel>
+    <Window.Resources>
+        <!-- ===== Colours ===== -->
+        <SolidColorBrush x:Key="Primary"        Color="#0078D4"/>
+        <SolidColorBrush x:Key="PrimaryDark"    Color="#005A9E"/>
+        <SolidColorBrush x:Key="PrimaryLight"   Color="#DEEBFF"/>
+        <SolidColorBrush x:Key="Surface"        Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SurfaceAlt"     Color="#FAFBFC"/>
+        <SolidColorBrush x:Key="Border"         Color="#E2E8F0"/>
+        <SolidColorBrush x:Key="BorderStrong"   Color="#CBD5E0"/>
+        <SolidColorBrush x:Key="TextPrimary"    Color="#1A202C"/>
+        <SolidColorBrush x:Key="TextSecondary"  Color="#4A5568"/>
+        <SolidColorBrush x:Key="TextMuted"      Color="#718096"/>
+        <SolidColorBrush x:Key="Success"        Color="#00875A"/>
+        <SolidColorBrush x:Key="Warning"        Color="#D9822B"/>
+        <SolidColorBrush x:Key="Danger"         Color="#DE350B"/>
+        <SolidColorBrush x:Key="Accent"         Color="#5C2D91"/>
+
+        <!-- ===== Card container ===== -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+        </Style>
+
+        <Style x:Key="CardSubtle" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Background" Value="{StaticResource SurfaceAlt}"/>
+            <Setter Property="Padding" Value="14"/>
+        </Style>
+
+        <!-- ===== Typography ===== -->
+        <Style x:Key="TabTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style x:Key="TabIntro" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,18"/>
+        </Style>
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="CardSubtitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+        <Style x:Key="CardBody" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="LineHeight" Value="18"/>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Margin" Value="0,8,0,4"/>
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,2,0,8"/>
+        </Style>
+
+        <!-- ===== Buttons ===== -->
+        <Style x:Key="PrimaryButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Primary}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource PrimaryDark}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{StaticResource Primary}" BorderThickness="1"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource PrimaryLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="MutedButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="#F0F2F5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        </Style>
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="{StaticResource Accent}"/>
+        </Style>
+        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="{StaticResource Success}"/>
+        </Style>
+        <Style x:Key="WarnButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+            <Setter Property="Background" Value="{StaticResource Warning}"/>
+        </Style>
+
+        <!-- ===== Input controls ===== -->
+        <Style TargetType="TextBox">
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrong}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+        </Style>
+
+        <!-- ===== Tab headers ===== -->
+        <Style x:Key="ModernTabItem" TargetType="TabItem">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="bd" Background="Transparent" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
+                                                  HorizontalAlignment="Center" RecognizesAccessKey="True"/>
+                                <Border x:Name="indicator" VerticalAlignment="Bottom" Height="3"
+                                        Background="Transparent" Margin="6,0,6,0"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                                <Setter TargetName="indicator" Property="Background" Value="{StaticResource Primary}"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource Primary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== "More info" expander ===== -->
+        <Style x:Key="InfoExpander" TargetType="Expander">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,4,0,12"/>
+            <Setter Property="Header" Value="ⓘ  How does this work?"/>
+            <Style.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                    <Setter Property="TextWrapping" Value="Wrap"/>
+                    <Setter Property="LineHeight" Value="17"/>
+                    <Setter Property="Margin" Value="0,4,0,6"/>
+                </Style>
+            </Style.Resources>
+        </Style>
+
+        <!-- ===== Status pills ===== -->
+        <Style x:Key="StatusPill" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource PrimaryLight}"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel LastChildFill="True" Background="{StaticResource Surface}">
+
+        <!-- ===== HEADER ===== -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+            <DockPanel Margin="24,18,24,16" LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Style="{StaticResource StatusPill}">
+                        <TextBlock Text="v3.8 · NW 2024–2027" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold"/>
+                    </Border>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="AutoNAV" FontSize="26" FontWeight="Bold" Foreground="{StaticResource TextPrimary}"/>
+                    <TextBlock Text="Automated Design Coordination for Navisworks Manage" FontSize="12" Foreground="{StaticResource TextMuted}" Margin="0,2,0,0"/>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
-        <!-- FOOTER (status panel — shows the messages that used to be MessageBox popups) -->
-        <Border DockPanel.Dock="Bottom" Background="#F0F0F0" Padding="10,6" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0" MinHeight="60">
+        <!-- ===== STATUS PANEL (bottom) ===== -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="20,10" MinHeight="78">
             <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top" Margin="10,0,0,0">
-                    <TextBlock Text="AutoNAV v3.7 | Navisworks 2024-2027" FontSize="10" Foreground="#666666" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Vertical" VerticalAlignment="Top" Margin="14,0,0,0">
+                    <Button Name="btnStatusClear" Content="Clear" Click="OnStatusClearClick"
+                            Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,4,0,0">
-                    <Button Name="btnStatusClear" Content="Clear" Click="OnStatusClearClick" Padding="6,2" FontSize="9" Background="Transparent" BorderBrush="#D0D0D0"/>
-                    <TextBlock Name="txtStatus" FontSize="9" Foreground="#888888" Margin="10,4,0,0" VerticalAlignment="Center"/>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="Activity" FontSize="10" Foreground="{StaticResource TextMuted}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <TextBlock Name="txtStatus" FontSize="10" Foreground="{StaticResource TextMuted}" Margin="14,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
-                <ScrollViewer Name="svAppStatus" VerticalScrollBarVisibility="Auto" MaxHeight="120">
-                    <TextBlock Name="txtAppStatus" FontSize="11" TextWrapping="Wrap" Padding="2,0,2,0"/>
+                <ScrollViewer Name="svAppStatus" VerticalScrollBarVisibility="Auto" MaxHeight="100">
+                    <TextBlock Name="txtAppStatus" FontSize="11" TextWrapping="Wrap" Padding="2,0"/>
                 </ScrollViewer>
             </DockPanel>
         </Border>
 
-        <!-- MAIN CONTENT - TABS -->
-        <TabControl Margin="10">
-            <!-- TAB 1: FUNCTIONS 1-3 -->
-            <TabItem Header="Search Sets (Func 1-3)">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="20">
-                        <TextBlock Text="Search Set Generation" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock Text="Create hierarchical search sets by discipline and category" FontSize="12" Foreground="#666666" Margin="0,0,0,20"/>
+        <!-- ===== MAIN TAB CONTROL ===== -->
+        <TabControl Margin="20,16,20,12" Background="Transparent" BorderThickness="0"
+                    ItemContainerStyle="{StaticResource ModernTabItem}">
+            <TabControl.Resources>
+                <Style TargetType="TabPanel">
+                    <Setter Property="Background" Value="Transparent"/>
+                </Style>
+            </TabControl.Resources>
 
-                        <!-- FUNCTION 1 -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 1: Create Discipline Search Sets" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="Creates '1. DISCIPLINES' folder with sets for ARCH, STRC, MECH, PLBG" FontSize="11" Foreground="#888888" Margin="0,0,0,12"/>
-                                <Button Name="btnFunction1" Content="Generate Discipline Sets" Click="OnFunction1Click" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"/>
+            <!-- =============================================================
+                 TAB 1: HOME
+                 ============================================================= -->
+            <TabItem Header="Home">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <Grid MaxWidth="900" HorizontalAlignment="Left">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Style="{StaticResource TabTitle}" Text="Welcome to AutoNAV"/>
+                            <TextBlock Style="{StaticResource TabIntro}">
+                                AutoNAV automates the most repetitive parts of clash coordination in Navisworks
+                                Manage — building search sets per discipline, generating clash test pairs,
+                                running them, grouping the results by where they sit in the building, and
+                                naming each group consistently. Pick a tab above to do one step at a time, or
+                                run AutoNAVismate below to do it all in one click.
+                            </TextBlock>
+                        </StackPanel>
+
+                        <!-- Quick start card -->
+                        <Border Grid.Row="1" Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource CardSubtitle}" Text="QUICK START"/>
+                                    <TextBlock Style="{StaticResource CardTitle}" Text="AutoNAVismate — one-button workflow"/>
+                                    <TextBlock Style="{StaticResource CardBody}">
+                                        Runs every AutoNAV step in sequence with sensible defaults.
+                                        You'll only be prompted when AutoNAV can't determine something on its own
+                                        (e.g. an unknown discipline for a loaded model).
+                                    </TextBlock>
+                                    <Expander Style="{StaticResource InfoExpander}">
+                                        <StackPanel>
+                                            <TextBlock>
+                                                <Run FontWeight="SemiBold">What it does, step by step:</Run>
+                                            </TextBlock>
+                                            <TextBlock>1.  Function 1 — discipline search sets from the loaded model filenames.</TextBlock>
+                                            <TextBlock>2.  Function 2 — element-property search sets, using each discipline's default property.</TextBlock>
+                                            <TextBlock>3.  Function 4 — generate every cross-discipline clash test pair and auto-run them.</TextBlock>
+                                            <TextBlock>4.  Function 5 — group Walls / Floors across every clash test.</TextBlock>
+                                            <TextBlock>5.  Function 6 — group remaining clashes by proximity, name with the default template.</TextBlock>
+                                            <TextBlock Margin="0,8,0,0">
+                                                <Run FontWeight="SemiBold">When to use it:</Run> Brand new model that you're coordinating for the first time, or any time you want a clean baseline before manual review.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Expander>
+                                </StackPanel>
+                                <Button Grid.Column="1" Name="btnAutoNAVismate" Content="Run AutoNAVismate"
+                                        Click="OnAutoNAVismateClick" Style="{StaticResource PrimaryButton}"
+                                        VerticalAlignment="Center" MinWidth="180" Padding="22,12" FontSize="13"/>
+                            </Grid>
+                        </Border>
+                        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,138,0,16" Background="Transparent" BorderThickness="0" Padding="0">
+                            <TextBlock Name="txtAutoNAVismateProgress" Style="{StaticResource Hint}" Margin="20,0,20,0"/>
+                        </Border>
+
+                        <!-- Workflow overview -->
+                        <Border Grid.Row="2" Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="MANUAL WORKFLOW"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Step by step"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    If you'd rather drive each step yourself, the tabs above are organised in the
+                                    order you'd typically use them.
+                                </TextBlock>
+
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Style="{StaticResource CardSubtle}" Margin="0,0,8,0">
+                                        <StackPanel>
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="1. SETUP"/>
+                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Search Sets" Margin="0,4,0,4"/>
+                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Build discipline + element search sets that the rest of the workflow depends on."/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Style="{StaticResource CardSubtle}" Margin="4,0,4,0">
+                                        <StackPanel>
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="2. RUN"/>
+                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Clash Tests" Margin="0,4,0,4"/>
+                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Generate every cross-discipline clash test pair and run them in one click."/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Style="{StaticResource CardSubtle}" Margin="4,0,4,0">
+                                        <StackPanel>
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="3. GROUP"/>
+                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Group &amp; Name" Margin="0,4,0,4"/>
+                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Cluster clashes by proximity, walls/floors, or your own grouping mode."/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="3" Style="{StaticResource CardSubtle}" Margin="8,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="4. POLISH"/>
+                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Rename" Margin="0,4,0,4"/>
+                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Apply naming templates to existing groups with a live preview."/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
                             </StackPanel>
                         </Border>
 
-                        <!-- FUNCTION 2 -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 2: Create Element Property Search Sets" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="Select discipline and property type for each. One property type per discipline." FontSize="11" Foreground="#888888" Margin="0,0,0,15"/>
+                        <!-- Tips card -->
+                        <Border Grid.Row="3" Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="TIPS"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Before you start"/>
+                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
+                                    •  Make sure every model you want to coordinate is loaded in Navisworks first — Function 1 reads the model list to derive disciplines.
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
+                                    •  All AutoNAV's actions are recorded in the Activity panel at the bottom of the window so you can see what it's doing.
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
+                                    •  Walls and Floors clash groups (created by Function 5) are preserved by every other tool — they never get renamed or regrouped.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
 
-                                <!-- DISCIPLINE + PROPERTY TYPE SELECTION -->
-                                <TextBlock Text="1. Select Disciplines &amp; Property Types" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10" Foreground="#333333"/>
-                                <TextBlock Text="Note: Select one property type per discipline. Create multiple times for different property types." FontSize="10" Foreground="#888888" Margin="0,0,0,8" FontStyle="Italic"/>
-                                
-                                <Border Background="#F9F9F9" BorderBrush="#E0E0E0" BorderThickness="1" Padding="10" Margin="0,0,0,12" CornerRadius="3">
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- =============================================================
+                 TAB 2: SETUP (Search Sets)
+                 ============================================================= -->
+            <TabItem Header="1. Setup">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource TabTitle}" Text="Search Sets"/>
+                        <TextBlock Style="{StaticResource TabIntro}">
+                            Build the search sets that the rest of the workflow depends on. Functions 1 and 2 are the
+                            most-used; Function 3 is an optional power tool for custom queries.
+                        </TextBlock>
+
+                        <!-- Function 1 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 1"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Create discipline search sets"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Scans every loaded model filename and creates a "1. DISCIPLINES" folder of search sets,
+                                    one per discipline (ARCH, STRC, MECH, ELEC, PLBG, FP, …). Drop the matching discipline
+                                    here and Function 4 can pair them up later.
+                                </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
                                     <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">How it identifies the discipline:</Run></TextBlock>
+                                        <TextBlock>•  Splits each filename on - / _ / space, then matches the resulting tokens against a built-in dictionary of NCS discipline codes.</TextBlock>
+                                        <TextBlock>•  If a filename has no recognisable discipline token (e.g. <Italic>UTUSB-TPC-DW-L01.nwc</Italic>), it falls back to the shortest unique discriminator — the token that distinguishes this file from every other loaded file.</TextBlock>
+                                        <TextBlock>•  Anything still unidentified pops a picker dialog where you assign a discipline by hand.</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Example:</Run></TextBlock>
+                                        <TextBlock FontFamily="Consolas" Foreground="{StaticResource TextPrimary}">
+                                            UTUSB-DSGN-ARCH-L01.nwc   →  ARCH (Architectural)
+                                            UTUSB-DSGN-STRC-L01.nwc   →  STRC (Structural)
+                                            UTUSB-DSGN-MECH-L01.nwc   →  MECH (Mechanical)
+                                            UTUSB-DSGN-ELEC-L01.nwc   →  ELEC (Electrical)
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Expander>
+                                <Button Name="btnFunction1" Content="Generate Discipline Sets"
+                                        Click="OnFunction1Click" Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Function 2 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 2"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Create element-property search sets"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    For every discipline checked below, generates one search set per unique value of the
+                                    chosen element property. The dropdown next to each discipline lists property types
+                                    that work well for that discipline (e.g. System Abbreviation for MECH, Category for
+                                    ARCH/STRC). Function 1 must be run first.
+                                </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">Why discipline-specific options?</Run></TextBlock>
+                                        <TextBlock>Mechanical / Plumbing / Electrical models are organised by system, so "System Abbreviation" cuts them cleanly. Architectural / Structural models are organised by category, so "Category" works better.</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Tip:</Run> The last option in every dropdown is "Element → File (catch-all)" which creates a single search set covering everything in that discipline's file. Pick this when the property-based option leaves elements unaccounted for.</TextBlock>
+                                    </StackPanel>
+                                </Expander>
+
+                                <Border Style="{StaticResource CardSubtle}" Margin="0,8,0,12">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Disciplines &amp; property type"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                            <Button Name="btnSelectAllDisciplines" Content="Select All" Click="BtnSelectAll_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="80" Margin="0,0,5,0"/>
-                                            <Button Name="btnDeselectAllDisciplines" Content="Deselect All" Click="BtnDeselectAll_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="80" Margin="0,0,5,0"/>
-                                            <Button Name="btnInvertSelection" Content="Invert Selection" Click="BtnInvertSelection_Click" Padding="8,5" Background="#0078D4" Foreground="White" FontSize="10" Width="100" Margin="0,0,5,0"/>
-                                            <Button Name="btnRefreshDisciplineList" Content="Refresh" Click="BtnRefreshDisciplines_Click" Padding="8,5" Background="#666666" Foreground="White" FontSize="10" Width="70"/>
+                                            <Button Name="btnSelectAllDisciplines" Content="Select All" Click="BtnSelectAll_Click" Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11" Margin="0,0,6,0"/>
+                                            <Button Name="btnDeselectAllDisciplines" Content="Deselect All" Click="BtnDeselectAll_Click" Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11" Margin="0,0,6,0"/>
+                                            <Button Name="btnInvertSelection" Content="Invert" Click="BtnInvertSelection_Click" Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11" Margin="0,0,6,0"/>
+                                            <Button Name="btnRefreshDisciplineList" Content="Refresh" Click="BtnRefreshDisciplines_Click" Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11"/>
                                         </StackPanel>
-                                        
-                                        <!-- Discipline list with dropdowns -->
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MinHeight="100" MaxHeight="300" Margin="0,5,0,0" BorderThickness="1" BorderBrush="#E0E0E0">
-                                            <StackPanel Name="disciplineCheckboxPanel" Orientation="Vertical" Background="White" Margin="5">
-                                                <TextBlock Text="No disciplines loaded. Run Function 1 first." FontSize="10" Foreground="#999999"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MinHeight="120" MaxHeight="280" BorderThickness="1" BorderBrush="{StaticResource Border}" Background="White">
+                                            <StackPanel Name="disciplineCheckboxPanel" Orientation="Vertical" Margin="10">
+                                                <TextBlock FontSize="11" Foreground="{StaticResource TextMuted}" FontStyle="Italic" Text="No disciplines loaded — run Function 1 first."/>
                                             </StackPanel>
                                         </ScrollViewer>
                                     </StackPanel>
                                 </Border>
 
-                                <!-- ACTION BUTTON -->
-                                <Button Name="btnFunction2" Content="Generate Element Property Search Sets" Click="OnFunction2Click" Padding="10,10" Background="#107C10" Foreground="White" FontWeight="Bold" FontSize="12" Height="40" HorizontalAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- FUNCTION 3 -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 3: Custom Search Sets from Property Values" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="Create custom search sets based on any property value in a discipline's model content" FontSize="11" Foreground="#888888" Margin="0,0,0,15"/>
-                                <TextBlock Text="Select a discipline, then choose a property category and property to create search sets for all unique values." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
-
-                                <!-- Discipline Selection -->
-                                <TextBlock Text="1. Select Discipline:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                <ComboBox Name="cmbFunction3Discipline" Height="26" Margin="0,0,0,12" FontSize="11" SelectionChanged="OnFunction3DisciplineChanged">
-                                    <ComboBoxItem Content="-- Select Discipline --" IsSelected="True"/>
-                                </ComboBox>
-
-                                <!-- Property Category Selection -->
-                                <TextBlock Text="2. Select Property Category:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                <ComboBox Name="cmbFunction3PropertyCategory" Height="26" Margin="0,0,0,12" FontSize="11" IsEnabled="False" SelectionChanged="OnFunction3PropertyCategoryChanged">
-                                    <ComboBoxItem Content="-- Select Category --" IsSelected="True"/>
-                                </ComboBox>
-
-                                <!-- Property Name Selection -->
-                                <TextBlock Text="3. Select Property:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                <ComboBox Name="cmbFunction3PropertyName" Height="26" Margin="0,0,0,12" FontSize="11" IsEnabled="False" SelectionChanged="OnFunction3PropertyNameChanged">
-                                    <ComboBoxItem Content="-- Select Property --" IsSelected="True"/>
-                                </ComboBox>
-
-                                <!-- Run Button -->
-                                <Button Name="btnFunction3" Content="Generate Custom Search Sets" Click="OnFunction3Click" IsEnabled="False" Padding="10,8" Background="#FFB900" Foreground="#000000" FontWeight="Bold" Width="220" HorizontalAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- TAB 2: FUNCTION 4 -->
-            <TabItem Header="Clash Tests (Func 4)">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="20">
-                        <TextBlock Text="Discipline-Based Clash Test Generation" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock Text="Automatically create clash tests from discipline and category sets" FontSize="12" Foreground="#666666" Margin="0,0,0,20"/>
-
-                        <!-- PREREQUISITES -->
-                        <Border Background="#FFF8DC" BorderBrush="#FFD700" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Prerequisites" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="✓ Functions 1-3 must complete first" FontSize="11" Margin="0,0,0,5"/>
-                                <TextBlock Text="✓ Requires '1. DISCIPLINES' folder with search sets" FontSize="11" Margin="0,0,0,5"/>
-                                <TextBlock Text="✓ Requires '2. CLASH SETS' folder with category sets" FontSize="11" Margin="0,0,0,0"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- FUNCTION 4 -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 4: Generate Clash Tests" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="Creates unique clash test pairs: ARCH vs STRC, ARCH vs MECH, STRC vs MECH, etc." FontSize="11" Foreground="#888888" Margin="0,0,0,12"/>
-                                <Button Name="btnFunction4" Content="Generate Clash Tests" Click="OnFunction4Click" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- FUNCTION 5 (Walls / Floors — was Function 6) -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 5: Group Clashes by Walls / Floors" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
-                                    For every clash test, groups results where either clashing element
-                                    belongs to a Walls or Floors search set (from 2. CLASH SETS).
-                                    All remaining clashes are left ungrouped — ready for Sherlock Distill.
-                                </TextBlock>
-                                <TextBlock Text="Prerequisites: Functions 1–4 complete, clash tests run." FontSize="10" Foreground="#666666" FontStyle="Italic" Margin="0,0,0,12"/>
-                                <Button Name="btnFunction6"
-                                        Content="Group All Tests — Walls / Floors"
-                                        Click="OnFunction6Click"
-                                        Padding="10,8"
-                                        Background="#107C10"
-                                        Foreground="White"
-                                        FontWeight="Bold"
-                                        Width="240"
+                                <Button Name="btnFunction2" Content="Generate Element-Property Search Sets"
+                                        Click="OnFunction2Click" Style="{StaticResource SuccessButton}"
                                         HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
 
-                        <!-- FUNCTION 6 (Proximity grouping driven by the naming template) -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 6: Run Tests &amp; Group Clashes by Proximity" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
-                                    Groups clashes by the nearest grid intersection so spatially-close
-                                    clashes share a group — letting you see problem areas at a glance.
-                                    The clash's discipline / selection-set details land in the group
-                                    name via the template below (and can be elaborated on as comments
-                                    or issues once the groups exist).
+                        <!-- Function 3 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 3 · OPTIONAL"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Custom search sets from any property value"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Power-user tool. Pick a discipline, a property category, then a specific property —
+                                    AutoNAV makes one search set per unique value of that property in that discipline's
+                                    model content.
                                 </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">When to use:</Run> When the per-discipline defaults from Function 2 don't slice your data the way you need. For example, generating one search set per Pipe Material on the plumbing model.</TextBlock>
+                                    </StackPanel>
+                                </Expander>
 
-                                <!-- UPDATE ALL TESTS SECTION -->
-                                <TextBlock Text="1. Run All Clash Tests:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <Button Name="btnUpdateAllTests" Content="Update All Tests (Run Simultaneously)" Click="OnUpdateAllTestsClick" Padding="10,8" Background="#D83B01" Foreground="White" FontWeight="Bold" Width="250" HorizontalAlignment="Left" Margin="0,0,0,15"/>
-                                <TextBlock Text="Runs all clash tests simultaneously in the background." FontSize="10" Foreground="#666666" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Discipline"/>
+                                <ComboBox Name="cmbFunction3Discipline" SelectionChanged="OnFunction3DisciplineChanged">
+                                    <ComboBoxItem Content="-- Select Discipline --" IsSelected="True"/>
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Property category"/>
+                                <ComboBox Name="cmbFunction3PropertyCategory" SelectionChanged="OnFunction3PropertyCategoryChanged">
+                                    <ComboBoxItem Content="-- Select Property Category --" IsSelected="True"/>
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Property name"/>
+                                <ComboBox Name="cmbFunction3PropertyName">
+                                    <ComboBoxItem Content="-- Select Property --" IsSelected="True"/>
+                                </ComboBox>
 
-                                <!-- KEEP-EXISTING + TEST SELECTION -->
-                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" FontSize="10" IsChecked="True" Margin="0,0,0,10"/>
-                                <TextBlock Text="2. Select Clash Test to Group:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <ComboBox Name="cmbClashTest" Width="350" Height="26" FontSize="11" Margin="0,0,0,10"/>
+                                <Button Name="btnFunction3" Content="Generate Custom Search Sets"
+                                        Click="OnFunction3Click" Style="{StaticResource SuccessButton}"
+                                        HorizontalAlignment="Left" Margin="0,16,0,0"/>
+                            </StackPanel>
+                        </Border>
 
-                                <!-- NAMING TEMPLATE -->
-                                <TextBlock Text="3. Clash Group Naming Template:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <ComboBox Name="cmbNamingTemplate" Width="600" Height="26" FontSize="11" Margin="0,0,0,4"
-                                          SelectionChanged="OnNamingTemplateChanged">
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- =============================================================
+                 TAB 3: CLASH TESTS
+                 ============================================================= -->
+            <TabItem Header="2. Clash Tests">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource TabTitle}" Text="Generate &amp; Run Clash Tests"/>
+                        <TextBlock Style="{StaticResource TabIntro}">
+                            Function 4 generates every cross-discipline clash test pair from the search sets created in
+                            Setup, then auto-runs them. Update All re-runs whatever tests already exist.
+                        </TextBlock>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 4"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Generate clash test pairs"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Walks every pair of disciplines from "1. DISCIPLINES" (e.g. ARCH × STRC, ARCH × MECH, …)
+                                    and creates a Clash Detective test for each pair. Structural and Architectural disciplines
+                                    are placed on Selection A so they land on the left side of every test, matching common
+                                    BIM coordination conventions.
+                                </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">Ordering rules:</Run></TextBlock>
+                                        <TextBlock>•  Identified Structural (highest priority on the left side)</TextBlock>
+                                        <TextBlock>•  Identified Architectural</TextBlock>
+                                        <TextBlock>•  Pattern-matched STRC / ARCH</TextBlock>
+                                        <TextBlock>•  Everything else alphabetical</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Example with STRC identified:</Run> STRC vs ARCH, STRC vs ELEC, STRC vs MECH, STRC vs PLBG, ARCH vs ELEC, …</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Auto-run:</Run> Once tests are generated, AutoNAV automatically calls "Update All" on Clash Detective so you don't have to. If the run fails (e.g. a model isn't loaded), the rest of the workflow still works on whatever tests are present.</TextBlock>
+                                    </StackPanel>
+                                </Expander>
+                                <Button Name="btnFunction4" Content="Generate Clash Tests"
+                                        Click="OnFunction4Click" Style="{StaticResource WarnButton}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="UPDATE ALL"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Re-run every existing clash test"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Runs Navisworks' "Update All" on every clash test in the document. Useful after model
+                                    changes, or if Function 4's auto-run didn't pick up a recent edit.
+                                </TextBlock>
+                                <Button Name="btnUpdateAllTests" Content="Update All Tests"
+                                        Click="OnUpdateAllTestsClick" Style="{StaticResource WarnButton}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- =============================================================
+                 TAB 4: GROUP & NAME
+                 ============================================================= -->
+            <TabItem Header="3. Group &amp; Name">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="1000" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource TabTitle}" Text="Group &amp; name clashes"/>
+                        <TextBlock Style="{StaticResource TabIntro}">
+                            Cluster clash results into named groups. Walls/Floors handles the easy-wins case first; the
+                            proximity grouper sorts the rest by nearest grid intersection and names each cluster with the
+                            chosen template. Use the advanced mode only when neither of those produces what you want.
+                        </TextBlock>
+
+                        <!-- Function 5 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 5"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Group Walls &amp; Floors"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    For every clash test, collects clashes where one of the items is in a Walls or Floors
+                                    search set and puts them in "Walls" or "Floors" groups respectively. Every other tool
+                                    in AutoNAV preserves these two groups — they never get renamed or regrouped.
+                                </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock>This handles the most common coordination issue (penetrations / clashes against walls and floors) cleanly up front, so the rest of the grouping tools can focus on everything else.</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Prerequisite:</Run> Function 2 must have produced "Walls" and "Floors" search sets under the relevant discipline (typically ARCH and STRC).</TextBlock>
+                                    </StackPanel>
+                                </Expander>
+                                <Button Name="btnFunction6" Content="Group Walls / Floors Across All Tests"
+                                        Click="OnFunction6Click" Style="{StaticResource SuccessButton}"
+                                        HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Function 6 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 6"/>
+                                <TextBlock Style="{StaticResource CardTitle}" Text="Group by proximity &amp; name with a template"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Groups remaining clashes by their nearest grid intersection so spatially-close clashes
+                                    share a cluster, then names each cluster using your selected naming template. Walls/Floors
+                                    groups from Function 5 are preserved.
+                                </TextBlock>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">Template tokens:</Run> {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {Time} {#}</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Example:</Run> Template <Italic>{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}</Italic> renders as:</TextBlock>
+                                        <TextBlock FontFamily="Consolas" Foreground="{StaticResource TextPrimary}" Margin="0,2,0,8">
+                                            05/31_L03_B8:C7 | ARCH vs STRC - Railings vs Structural Framing 1
+                                        </TextBlock>
+                                        <TextBlock><Run FontWeight="SemiBold">Status filters:</Run> "New Clashes" controls which statuses get freshly grouped. "Regroup &amp; Rename" (only enabled when no New Clashes status is selected) re-applies the template to existing groups of those statuses.</TextBlock>
+                                    </StackPanel>
+                                </Expander>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Pick a clash test"/>
+                                <ComboBox Name="cmbClashTest" Margin="0,0,0,4"/>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Naming template"/>
+                                <ComboBox Name="cmbNamingTemplate" SelectionChanged="OnNamingTemplateChanged" Margin="0,0,0,4">
                                     <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
                                                   Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
                                                   IsSelected="True"/>
@@ -202,68 +659,56 @@ Foreground="#333333">
                                                   Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
                                     <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
                                 </ComboBox>
-                                <TextBlock Text="Preview:" FontSize="9" Foreground="#666666" Margin="0,2,0,2"/>
-                                <TextBlock Name="txtNamingPreview" Text="" FontSize="10" Foreground="#0078D4" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,10">
-                                    Tokens: {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {#}.
-                                    Missing data falls back to placeholders (LXX, AREA) so every clash is named.
-                                </TextBlock>
+                                <TextBlock Name="txtNamingPreview" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
-                                <!-- STATUS FILTERS -->
-                                <TextBlock Text="4. Status Filters:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" IsChecked="True"/>
 
-                                <Border Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,8">
+                                <!-- Status filters -->
+                                <Border Style="{StaticResource CardSubtle}" Margin="0,8,0,12">
                                     <StackPanel>
-                                        <TextBlock Text="New Clashes — statuses to GROUP &amp; NAME" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Only clashes whose status matches one of these will be grouped." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="STATUS FILTERS"/>
+                                        <TextBlock Style="{StaticResource Hint}" Text="New Clashes — these statuses get freshly grouped &amp; named."/>
                                         <StackPanel Orientation="Horizontal">
-                                            <CheckBox Name="chkNewStatusNew"         Content="New"          FontSize="10" IsChecked="True"  Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                            <CheckBox Name="chkNewStatusActive"      Content="Active"       FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                            <CheckBox Name="chkNewStatusReviewed"    Content="Under Review" FontSize="10" Margin="0,0,12,0" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                            <CheckBox Name="chkNewStatusNew"      Content="New" IsChecked="True" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
+                                            <CheckBox Name="chkNewStatusActive"   Content="Active" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
+                                            <CheckBox Name="chkNewStatusReviewed" Content="Under Review" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
                                         </StackPanel>
+                                        <Border Name="brdRegroup" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+                                            <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
+                                                <TextBlock Style="{StaticResource Hint}" Text="Regroup &amp; Rename — re-apply the template to existing groups of these statuses. Only enabled when zero New-Clashes statuses are selected above."/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <CheckBox Name="chkRegroupStatusNew"      Content="New" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkRegroupStatusActive"   Content="Active" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkRegroupStatusApproved" Content="Approved" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
-                                <Border Name="brdRegroup" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3" Padding="10" Margin="0,0,0,10">
-                                    <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
-                                        <TextBlock Text="Regroup &amp; Rename — re-apply template to existing groups with these statuses" FontSize="10" FontWeight="SemiBold" Foreground="#333333" Margin="0,0,0,4"/>
-                                        <TextBlock Text="Enabled only when no &quot;New Clashes&quot; status is selected above." FontSize="9" Foreground="#888888" Margin="0,0,0,6"/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Name="chkRegroupStatusNew"      Content="New"          FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusActive"   Content="Active"       FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusApproved" Content="Approved"     FontSize="10" Margin="0,0,12,0"/>
-                                            <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"     FontSize="10" Margin="0,0,12,0"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- GROUP BUTTONS -->
-                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180" HorizontalAlignment="Left"/>
-                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Padding="10,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="150" HorizontalAlignment="Left" Margin="10,0,0,0"/>
-                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Padding="10,8" Background="#666666" Foreground="White" FontWeight="Bold" Width="130" HorizontalAlignment="Left" Margin="10,0,0,0"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Padding="10,8" Background="#0078D4" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left"
-                                            ToolTip="Apply the current naming template to clash groups currently selected in Clash Detective. With nothing selected, shows a picker."/>
-                                </StackPanel>
+                                <!-- Buttons -->
+                                <WrapPanel>
+                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
+                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
+                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Style="{StaticResource MutedButton}" Margin="0,0,0,8"/>
+                                </WrapPanel>
                             </StackPanel>
                         </Border>
 
-                        <!-- FUNCTION 7 (Manual / Advanced Grouping — fallback when Function 6's proximity grouping isn't what you want) -->
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" Margin="0,0,0,15" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Function 7: Manual / Advanced Grouping" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" Margin="0,0,0,12">
-                                    Fallback grouper. Pick a primary and (optional) sub-grouping mode
-                                    yourself. Uses the same test selector, naming template, and status
-                                    filters from Function 6 above — only the grouping mode is different.
-                                </TextBlock>
-
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="Primary Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <ComboBox Name="cmbGroupingMode" Width="180" Height="26" FontSize="11">
+                        <!-- Function 7 (collapsed by default) -->
+                        <Expander Header="Advanced — Function 7: Manual grouping modes" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,16">
+                            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource CardBody}">
+                                        Fallback grouper for when Function 6's proximity grouping isn't what you want. Pick a
+                                        primary and (optional) sub-grouping mode by hand. Uses the same test selector,
+                                        template, and status filters from Function 6 above.
+                                    </TextBlock>
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Primary grouping mode"/>
+                                    <ComboBox Name="cmbGroupingMode">
                                         <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
                                         <ComboBoxItem Content="Level" Tag="Level"/>
                                         <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
@@ -281,11 +726,8 @@ Foreground="#333333">
                                         <ComboBoxItem Content="Last Unique Pair" Tag="LastUnique"/>
                                         <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
                                     </ComboBox>
-                                </StackPanel>
-
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                    <TextBlock Text="Sub-Grouping:" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <ComboBox Name="cmbSubGroupingMode" Width="180" Height="26" FontSize="11">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Sub-grouping mode (optional)"/>
+                                    <ComboBox Name="cmbSubGroupingMode">
                                         <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
                                         <ComboBoxItem Content="Level" Tag="Level"/>
                                         <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
@@ -298,129 +740,105 @@ Foreground="#333333">
                                         <ComboBoxItem Content="Layer" Tag="Layer"/>
                                         <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
                                     </ComboBox>
+                                    <WrapPanel Margin="0,16,0,0">
+                                        <Button Name="btnFunction7GroupSelected" Content="Group Selected Test (Manual)" Click="OnFunction7GroupSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                                        <Button Name="btnFunction7GroupAll" Content="Group All Tests (Manual)" Click="OnFunction7GroupAllClick" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
+                                    </WrapPanel>
                                 </StackPanel>
+                            </Border>
+                        </Expander>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                    <Button Name="btnFunction7GroupSelected" Content="Group Selected Test (Manual)" Click="OnFunction7GroupSelectedClick" Padding="10,8" Background="#107C10" Foreground="White" FontWeight="Bold" Width="220" HorizontalAlignment="Left"/>
-                                    <Button Name="btnFunction7GroupAll" Content="Group All Tests (Manual)" Click="OnFunction7GroupAllClick" Padding="10,8" Background="#107C10" Foreground="White" FontWeight="Bold" Width="200" HorizontalAlignment="Left" Margin="10,0,0,0"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- INFO -->
-                        <Border Background="#E7F3FF" BorderBrush="#0078D4" BorderThickness="1" CornerRadius="4">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="How it works:" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <TextBlock Text="1. Validates folder structure exists" FontSize="10" Margin="0,0,0,4"/>
-                                <TextBlock Text="2. Extracts all disciplines from 1. DISCIPLINES" FontSize="10" Margin="0,0,0,4"/>
-                                <TextBlock Text="3. Creates unique test pairs" FontSize="10" Margin="0,0,0,4"/>
-                                <TextBlock Text="4. Populates with matching search sets from 2. CLASH SETS" FontSize="10" Margin="0,0,0,4"/>
-                                <TextBlock Text="5. Skips tests that already exist" FontSize="10" Margin="0,0,0,0"/>
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 3: Rename clash groups (data-grid driven) -->
-            <TabItem Header="Rename">
-                <DockPanel Margin="10" LastChildFill="True">
-                    <!-- TOP: test selector + template controls + filter + counts -->
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <TextBlock Text="Rename Clash Groups" FontSize="16" FontWeight="Bold" Margin="0,0,0,6"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#666666" Margin="0,0,0,10">
-                            Pick a test (or "All tests"), choose a template, and review the live
-                            "Current → Proposed" mapping in the grid below.  Tick the rows you want
-                            renamed and click "Rename Selected".  Walls / Floors groups stay untouched
-                            regardless — Function 5 owns those.
+            <!-- =============================================================
+                 TAB 5: RENAME
+                 ============================================================= -->
+            <TabItem Header="4. Rename">
+                <DockPanel Margin="0,16,0,0" LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <TextBlock Style="{StaticResource TabTitle}" Text="Rename clash groups"/>
+                        <TextBlock Style="{StaticResource TabIntro}">
+                            Pick a test (or "All tests"), choose a naming template, and review the live Current → Proposed
+                            mapping in the grid. Tick the rows you want renamed and click Rename Selected. Walls / Floors
+                            stay untouched regardless.
                         </TextBlock>
 
-                        <Grid Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Test:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
-                            <ComboBox Name="cmbRenameTest" Grid.Column="1" Height="26" FontSize="11"
-                                      SelectionChanged="OnRenameTestChanged"/>
-                            <Button Grid.Column="2" Name="btnRenameRefresh" Content="Refresh" Click="OnRenameRefreshClick"
-                                    Padding="10,6" Margin="8,0,0,0" Background="#666666" Foreground="White" FontWeight="Bold" Width="80"/>
-                        </Grid>
+                        <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,10">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Test:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12" FontWeight="SemiBold"/>
+                                    <ComboBox Name="cmbRenameTest" Grid.Column="1" SelectionChanged="OnRenameTestChanged"/>
+                                    <Button Grid.Column="2" Name="btnRenameRefresh" Content="Refresh" Click="OnRenameRefreshClick" Style="{StaticResource MutedButton}" Margin="8,0,0,0" Padding="14,6"/>
+                                </Grid>
 
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Preset:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
-                            <ComboBox Name="cmbRenameTemplate" Grid.Column="1" Height="26" FontSize="11"
-                                      SelectionChanged="OnRenameTemplateChanged">
-                                <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                              Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                              IsSelected="True"/>
-                                <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                              Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
-                                <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
-                                              Tag="{}{TestName} | {Level}_{Area} {#}"/>
-                                <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
-                                              Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
-                                <ComboBoxItem Content="(custom — use the text box below)" Tag="__CUSTOM__"/>
-                            </ComboBox>
-                        </Grid>
-                        <TextBlock Text="Custom template (used when 'custom' preset is selected):" FontSize="10" Foreground="#888888" Margin="0,0,0,2"/>
-                        <TextBox Name="txtRenameCustomTemplate" Height="26" FontSize="11"
-                                 Text="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                 ToolTip="Tokens listed below the textbox."
-                                 Margin="0,0,0,4"
-                                 TextChanged="OnRenameTemplateChanged"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="9" Foreground="#888888" Margin="0,0,0,8">
-                            Tokens: {Month} {Day} {Year} {Time} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {#}.  Rearrange / mix them freely, or add plain text around them.
-                        </TextBlock>
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Preset:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12" FontWeight="SemiBold"/>
+                                    <ComboBox Name="cmbRenameTemplate" Grid.Column="1" SelectionChanged="OnRenameTemplateChanged">
+                                        <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                      Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                      IsSelected="True"/>
+                                        <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                      Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
+                                                      Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
+                                                      Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="(custom — use the text box below)" Tag="__CUSTOM__"/>
+                                    </ComboBox>
+                                </Grid>
 
-                        <!-- Filter row + counts -->
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Filter:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11"/>
-                            <ComboBox Name="cmbRenameFilter" Grid.Column="1" Height="26" FontSize="11"
-                                      SelectionChanged="OnRenameFilterChanged">
-                                <ComboBoxItem Content="All groups (excl. Walls/Floors)" Tag="all"  IsSelected="True"/>
-                                <ComboBoxItem Content="Groups whose current name already matches a known preset" Tag="preset"/>
-                                <ComboBoxItem Content="Groups with empty / default names only" Tag="empty"/>
-                                <ComboBoxItem Content="Include Walls / Floors (advanced)" Tag="all+wf"/>
-                            </ComboBox>
-                            <CheckBox Name="chkRenameKeepExisting" Grid.Column="2" Content="Keep existing names"
-                                      IsChecked="True" FontSize="10" VerticalAlignment="Center" Margin="12,0,0,0"
-                                      Checked="OnRenameKeepExistingChanged" Unchecked="OnRenameKeepExistingChanged"
-                                      ToolTip="When on: only rows whose Current Name is empty/whitespace get renamed. When off: every ticked row gets renamed."/>
-                        </Grid>
+                                <TextBlock Style="{StaticResource Hint}" Text="Custom template (used when 'custom' preset is selected):" Margin="0,8,0,2"/>
+                                <TextBox Name="txtRenameCustomTemplate"
+                                         Text="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                         TextChanged="OnRenameTemplateChanged"/>
+                                <TextBlock Style="{StaticResource Hint}" Text="Tokens: {Month} {Day} {Year} {Time} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {#}"/>
 
-                        <Border Background="#F4F8FE" BorderBrush="#0078D4" BorderThickness="1" CornerRadius="3" Padding="8,4" Margin="0,0,0,4">
-                            <TextBlock Name="txtRenameCounts" FontSize="11" Foreground="#0078D4" TextWrapping="Wrap"/>
+                                <Grid Margin="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Filter:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12" FontWeight="SemiBold"/>
+                                    <ComboBox Name="cmbRenameFilter" Grid.Column="1" SelectionChanged="OnRenameFilterChanged">
+                                        <ComboBoxItem Content="All groups (excl. Walls/Floors)" Tag="all" IsSelected="True"/>
+                                        <ComboBoxItem Content="Groups whose current name already matches a known preset" Tag="preset"/>
+                                        <ComboBoxItem Content="Groups with empty / default names only" Tag="empty"/>
+                                        <ComboBoxItem Content="Include Walls / Floors (advanced)" Tag="all+wf"/>
+                                    </ComboBox>
+                                    <CheckBox Name="chkRenameKeepExisting" Grid.Column="2" Content="Keep existing names" IsChecked="True" Checked="OnRenameKeepExistingChanged" Unchecked="OnRenameKeepExistingChanged" Margin="14,0,0,0"/>
+                                </Grid>
+
+                                <Border Background="{StaticResource PrimaryLight}" BorderBrush="{StaticResource Primary}" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,10,0,0">
+                                    <TextBlock Name="txtRenameCounts" FontSize="11" Foreground="{StaticResource PrimaryDark}" TextWrapping="Wrap"/>
+                                </Border>
+                            </StackPanel>
                         </Border>
                     </StackPanel>
 
-                    <!-- BOTTOM: action buttons + status -->
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
-                        <Button Name="btnRenameApply" Content="Rename Selected" Click="OnRenameApplyClick"
-                                Padding="14,8" Background="#5C2D91" Foreground="White" FontWeight="Bold" Width="180"/>
-                        <Button Name="btnRenameSelectAll" Content="Select All Rows" Click="OnRenameSelectAllClick"
-                                Padding="10,8" Margin="10,0,0,0" Background="#0078D4" Foreground="White" Width="140"/>
-                        <Button Name="btnRenameSelectNone" Content="Clear Selection" Click="OnRenameSelectNoneClick"
-                                Padding="10,8" Margin="10,0,0,0" Background="#666666" Foreground="White" Width="140"/>
-                        <TextBlock Name="txtRenameStatus" VerticalAlignment="Center" Margin="14,0,0,0" FontSize="11" Foreground="#0078D4"/>
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                        <Button Name="btnRenameApply" Content="Rename Selected" Click="OnRenameApplyClick" Style="{StaticResource AccentButton}" MinWidth="180"/>
+                        <Button Name="btnRenameSelectAll" Content="Select All Rows" Click="OnRenameSelectAllClick" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0" MinWidth="140"/>
+                        <Button Name="btnRenameSelectNone" Content="Clear Selection" Click="OnRenameSelectNoneClick" Style="{StaticResource MutedButton}" Margin="10,0,0,0" MinWidth="140"/>
+                        <TextBlock Name="txtRenameStatus" VerticalAlignment="Center" Margin="16,0,0,0" FontSize="11" Foreground="{StaticResource Primary}"/>
                     </StackPanel>
 
-                    <!-- CENTER: DataGrid showing Current -> Proposed -->
-                    <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="3">
+                    <Border BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="4">
                         <DataGrid Name="dgRenameRows" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                                   GridLinesVisibility="Horizontal" HeadersVisibility="Column"
                                   SelectionMode="Extended" SelectionUnit="FullRow" Background="White"
-                                  RowHeaderWidth="0" FontSize="11" AlternatingRowBackground="#FAFAFA">
+                                  RowHeaderWidth="0" FontSize="11" AlternatingRowBackground="#FAFBFC">
                             <DataGrid.Columns>
                                 <DataGridCheckBoxColumn Header="Sel" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="40"/>
                                 <DataGridTextColumn Header="Test" Binding="{Binding TestName}" Width="180" IsReadOnly="True"/>
@@ -429,7 +847,7 @@ Foreground="#333333">
                                 <DataGridTextColumn Header="Proposed Name" Binding="{Binding ProposedName}" Width="*" IsReadOnly="True">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="#0078D4"/>
+                                            <Setter Property="Foreground" Value="{StaticResource Primary}"/>
                                             <Setter Property="FontWeight" Value="SemiBold"/>
                                         </Style>
                                     </DataGridTextColumn.ElementStyle>
@@ -439,55 +857,6 @@ Foreground="#333333">
                         </DataGrid>
                     </Border>
                 </DockPanel>
-            </TabItem>
-
-            <!-- TAB 4: AutoNAVismate -->
-            <TabItem Header="AutoNAVismate">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="20">
-                        <TextBlock Text="AutoNAVismate — one-button full workflow" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#666666" Margin="0,0,0,20">
-                            Runs every AutoNAV function in sequence with their default settings.
-                            You'll only be prompted when the plugin can't automatically determine a value
-                            (e.g. an unknown discipline for a loaded model).
-                        </TextBlock>
-
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,15">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Workflow steps" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
-                                    1. Function 1 — discipline search sets (prompts only on unrecognised disciplines).
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
-                                    2. Function 2 — element-property search sets, using each discipline's default property option.
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
-                                    3. Function 4 — generate every cross-discipline clash test pair AND auto-run them.
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
-                                    4. Function 5 — group Walls / Floors across every clash test.
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#333333" Margin="0,0,0,4">
-                                    5. Function 6 — group + name remaining clashes with the default template (status: New).
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="#888888" FontStyle="Italic" Margin="0,8,0,0">
-                                    "Keep existing groups" defaults to on, so Function 6 won't undo Function 5's work.
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="0,0,0,15">
-                            <StackPanel Margin="15">
-                                <TextBlock Text="Run" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                                <Button Name="btnAutoNAVismate" Content="Run AutoNAVismate" Click="OnAutoNAVismateClick"
-                                        Padding="14,10" Background="#0078D4" Foreground="White" FontWeight="Bold"
-                                        FontSize="14" Width="240" HorizontalAlignment="Left"/>
-                                <TextBlock Name="txtAutoNAVismateProgress" Text="" FontSize="11" Foreground="#0078D4"
-                                           Margin="0,12,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
             </TabItem>
         </TabControl>
     </DockPanel>
