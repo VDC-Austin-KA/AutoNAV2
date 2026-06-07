@@ -235,7 +235,7 @@
             <DockPanel Margin="24,18,24,16" LastChildFill="True">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Style="{StaticResource StatusPill}">
-                        <TextBlock Text="v3.8 · NW 2024–2027" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold"/>
+                        <TextBlock Text="v3.10 · NW 2024–2027" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold"/>
                     </Border>
                 </StackPanel>
                 <StackPanel>
@@ -245,18 +245,17 @@
             </DockPanel>
         </Border>
 
-        <!-- ===== STATUS PANEL (bottom) ===== -->
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="20,10" MinHeight="78">
+        <!-- ===== STATUS PANEL (bottom, collapsible) ===== -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource SurfaceAlt}" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Padding="20,4">
             <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Right" Orientation="Vertical" VerticalAlignment="Top" Margin="14,0,0,0">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <Button Name="btnStatusToggle" Content="▾ Activity" Click="OnStatusToggleClick"
+                            Style="{StaticResource MutedButton}" Padding="8,2" MinHeight="0" FontSize="10" Margin="0,0,6,0"/>
                     <Button Name="btnStatusClear" Content="Clear" Click="OnStatusClearClick"
-                            Style="{StaticResource MutedButton}" Padding="10,4" MinHeight="0" FontSize="11"/>
+                            Style="{StaticResource MutedButton}" Padding="8,2" MinHeight="0" FontSize="10"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock Text="Activity" FontSize="10" Foreground="{StaticResource TextMuted}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Name="txtStatus" FontSize="10" Foreground="{StaticResource TextMuted}" Margin="14,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                <ScrollViewer Name="svAppStatus" VerticalScrollBarVisibility="Auto" MaxHeight="100">
+                <TextBlock Name="txtStatus" DockPanel.Dock="Left" FontSize="10" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <ScrollViewer Name="svAppStatus" VerticalScrollBarVisibility="Auto" MaxHeight="60" Visibility="Collapsed" Margin="0,4,0,0">
                     <TextBlock Name="txtAppStatus" FontSize="11" TextWrapping="Wrap" Padding="2,0"/>
                 </ScrollViewer>
             </DockPanel>
@@ -271,140 +270,6 @@
                 </Style>
             </TabControl.Resources>
 
-            <!-- =============================================================
-                 TAB 1: HOME
-                 ============================================================= -->
-            <TabItem Header="Home">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
-                    <Grid MaxWidth="900" HorizontalAlignment="Left">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <StackPanel Grid.Row="0">
-                            <TextBlock Style="{StaticResource TabTitle}" Text="Welcome to AutoNAV"/>
-                            <TextBlock Style="{StaticResource TabIntro}">
-                                AutoNAV automates the most repetitive parts of clash coordination in Navisworks
-                                Manage — building search sets per discipline, generating clash test pairs,
-                                running them, grouping the results by where they sit in the building, and
-                                naming each group consistently. Pick a tab above to do one step at a time, or
-                                run AutoNAVismate below to do it all in one click.
-                            </TextBlock>
-                        </StackPanel>
-
-                        <!-- Quick start card -->
-                        <Border Grid.Row="1" Style="{StaticResource Card}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Style="{StaticResource CardSubtitle}" Text="QUICK START"/>
-                                    <TextBlock Style="{StaticResource CardTitle}" Text="AutoNAVismate — one-button workflow"/>
-                                    <TextBlock Style="{StaticResource CardBody}">
-                                        Runs every AutoNAV step in sequence with sensible defaults.
-                                        You'll only be prompted when AutoNAV can't determine something on its own
-                                        (e.g. an unknown discipline for a loaded model).
-                                    </TextBlock>
-                                    <Expander Style="{StaticResource InfoExpander}">
-                                        <StackPanel>
-                                            <TextBlock>
-                                                <Run FontWeight="SemiBold">What it does, step by step:</Run>
-                                            </TextBlock>
-                                            <TextBlock>1.  Function 1 — discipline search sets from the loaded model filenames.</TextBlock>
-                                            <TextBlock>2.  Function 2 — element-property search sets, using each discipline's default property.</TextBlock>
-                                            <TextBlock>3.  Function 4 — generate every cross-discipline clash test pair and auto-run them.</TextBlock>
-                                            <TextBlock>4.  Function 5 — group Walls / Floors across every clash test.</TextBlock>
-                                            <TextBlock>5.  Function 6 — group remaining clashes by proximity, name with the default template.</TextBlock>
-                                            <TextBlock Margin="0,8,0,0">
-                                                <Run FontWeight="SemiBold">When to use it:</Run> Brand new model that you're coordinating for the first time, or any time you want a clean baseline before manual review.
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </Expander>
-                                </StackPanel>
-                                <Button Grid.Column="1" Name="btnAutoNAVismate" Content="Run AutoNAVismate"
-                                        Click="OnAutoNAVismateClick" Style="{StaticResource PrimaryButton}"
-                                        VerticalAlignment="Center" MinWidth="180" Padding="22,12" FontSize="13"/>
-                            </Grid>
-                        </Border>
-                        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,138,0,16" Background="Transparent" BorderThickness="0" Padding="0">
-                            <TextBlock Name="txtAutoNAVismateProgress" Style="{StaticResource Hint}" Margin="20,0,20,0"/>
-                        </Border>
-
-                        <!-- Workflow overview -->
-                        <Border Grid.Row="2" Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource CardSubtitle}" Text="MANUAL WORKFLOW"/>
-                                <TextBlock Style="{StaticResource CardTitle}" Text="Step by step"/>
-                                <TextBlock Style="{StaticResource CardBody}">
-                                    If you'd rather drive each step yourself, the tabs above are organised in the
-                                    order you'd typically use them.
-                                </TextBlock>
-
-                                <Grid Margin="0,4,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <Border Grid.Column="0" Style="{StaticResource CardSubtle}" Margin="0,0,8,0">
-                                        <StackPanel>
-                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="1. SETUP"/>
-                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Search Sets" Margin="0,4,0,4"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Build discipline + element search sets that the rest of the workflow depends on."/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="1" Style="{StaticResource CardSubtle}" Margin="4,0,4,0">
-                                        <StackPanel>
-                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="2. RUN"/>
-                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Clash Tests" Margin="0,4,0,4"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Generate every cross-discipline clash test pair and run them in one click."/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="2" Style="{StaticResource CardSubtle}" Margin="4,0,4,0">
-                                        <StackPanel>
-                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="3. GROUP"/>
-                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Group &amp; Name" Margin="0,4,0,4"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Cluster clashes by proximity, walls/floors, or your own grouping mode."/>
-                                        </StackPanel>
-                                    </Border>
-                                    <Border Grid.Column="3" Style="{StaticResource CardSubtle}" Margin="8,0,0,0">
-                                        <StackPanel>
-                                            <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Primary}" Text="4. POLISH"/>
-                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}" Text="Rename" Margin="0,4,0,4"/>
-                                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Text="Apply naming templates to existing groups with a live preview."/>
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Tips card -->
-                        <Border Grid.Row="3" Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource CardSubtitle}" Text="TIPS"/>
-                                <TextBlock Style="{StaticResource CardTitle}" Text="Before you start"/>
-                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
-                                    •  Make sure every model you want to coordinate is loaded in Navisworks first — Function 1 reads the model list to derive disciplines.
-                                </TextBlock>
-                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
-                                    •  All AutoNAV's actions are recorded in the Activity panel at the bottom of the window so you can see what it's doing.
-                                </TextBlock>
-                                <TextBlock Style="{StaticResource CardBody}" Margin="0,0,0,2">
-                                    •  Walls and Floors clash groups (created by Function 5) are preserved by every other tool — they never get renamed or regrouped.
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                    </Grid>
-                </ScrollViewer>
-            </TabItem>
 
             <!-- =============================================================
                  TAB 2: SETUP (Search Sets)
@@ -590,183 +455,27 @@
             <!-- =============================================================
                  TAB 4: GROUP & NAME
                  ============================================================= -->
-            <TabItem Header="3. Group &amp; Name">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
-                    <StackPanel MaxWidth="1000" HorizontalAlignment="Left">
-                        <TextBlock Style="{StaticResource TabTitle}" Text="Group &amp; name clashes"/>
-                        <TextBlock Style="{StaticResource TabIntro}">
-                            Cluster clash results into named groups. Walls/Floors handles the easy-wins case first; the
-                            proximity grouper sorts the rest by nearest grid intersection and names each cluster with the
-                            chosen template. Use the advanced mode only when neither of those produces what you want.
-                        </TextBlock>
-
-                        <!-- Function 5 -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 5"/>
-                                <TextBlock Style="{StaticResource CardTitle}" Text="Group Walls &amp; Floors"/>
-                                <TextBlock Style="{StaticResource CardBody}">
-                                    For every clash test, collects clashes where one of the items is in a Walls or Floors
-                                    search set and puts them in "Walls" or "Floors" groups respectively. Every other tool
-                                    in AutoNAV preserves these two groups — they never get renamed or regrouped.
-                                </TextBlock>
-                                <Expander Style="{StaticResource InfoExpander}">
-                                    <StackPanel>
-                                        <TextBlock>This handles the most common coordination issue (penetrations / clashes against walls and floors) cleanly up front, so the rest of the grouping tools can focus on everything else.</TextBlock>
-                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Prerequisite:</Run> Function 2 must have produced "Walls" and "Floors" search sets under the relevant discipline (typically ARCH and STRC).</TextBlock>
-                                    </StackPanel>
-                                </Expander>
-                                <Button Name="btnFunction6" Content="Group Walls / Floors Across All Tests"
-                                        Click="OnFunction6Click" Style="{StaticResource SuccessButton}"
-                                        HorizontalAlignment="Left"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Function 6 -->
-                        <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 6"/>
-                                <TextBlock Style="{StaticResource CardTitle}" Text="Group by proximity &amp; name with a template"/>
-                                <TextBlock Style="{StaticResource CardBody}">
-                                    Groups remaining clashes by their nearest grid intersection so spatially-close clashes
-                                    share a cluster, then names each cluster using your selected naming template. Walls/Floors
-                                    groups from Function 5 are preserved.
-                                </TextBlock>
-                                <Expander Style="{StaticResource InfoExpander}">
-                                    <StackPanel>
-                                        <TextBlock><Run FontWeight="SemiBold">Template tokens:</Run> {Month} {Day} {Year} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {Time} {#}</TextBlock>
-                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Example:</Run> Template <Italic>{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}</Italic> renders as:</TextBlock>
-                                        <TextBlock FontFamily="Consolas" Foreground="{StaticResource TextPrimary}" Margin="0,2,0,8">
-                                            05/31_L03_B8:C7 | ARCH vs STRC - Railings vs Structural Framing 1
-                                        </TextBlock>
-                                        <TextBlock><Run FontWeight="SemiBold">Status filters:</Run> "New Clashes" controls which statuses get freshly grouped. "Regroup &amp; Rename" (only enabled when no New Clashes status is selected) re-applies the template to existing groups of those statuses.</TextBlock>
-                                    </StackPanel>
-                                </Expander>
-
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Pick a clash test"/>
-                                <ComboBox Name="cmbClashTest" Margin="0,0,0,4"/>
-
-                                <TextBlock Style="{StaticResource FieldLabel}" Text="Naming template"/>
-                                <ComboBox Name="cmbNamingTemplate" SelectionChanged="OnNamingTemplateChanged" Margin="0,0,0,4">
-                                    <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  IsSelected="True"/>
-                                    <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
-                                    <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
-                                                  Tag="{}{TestName} | {Level}_{Area} {#}"/>
-                                    <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
-                                                  Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
-                                    <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
-                                </ComboBox>
-                                <TextBlock Name="txtNamingPreview" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,8"/>
-
-                                <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" IsChecked="True"/>
-
-                                <!-- Status filters -->
-                                <Border Style="{StaticResource CardSubtle}" Margin="0,8,0,12">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="STATUS FILTERS"/>
-                                        <TextBlock Style="{StaticResource Hint}" Text="New Clashes — these statuses get freshly grouped &amp; named."/>
-                                        <StackPanel Orientation="Horizontal">
-                                            <CheckBox Name="chkNewStatusNew"      Content="New" IsChecked="True" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
-                                            <CheckBox Name="chkNewStatusActive"   Content="Active" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
-                                            <CheckBox Name="chkNewStatusReviewed" Content="Under Review" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
-                                        </StackPanel>
-                                        <Border Name="brdRegroup" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
-                                            <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
-                                                <TextBlock Style="{StaticResource Hint}" Text="Regroup &amp; Rename — re-apply the template to existing groups of these statuses. Only enabled when zero New-Clashes statuses are selected above."/>
-                                                <StackPanel Orientation="Horizontal">
-                                                    <CheckBox Name="chkRegroupStatusNew"      Content="New" Margin="0,0,16,0"/>
-                                                    <CheckBox Name="chkRegroupStatusActive"   Content="Active" Margin="0,0,16,0"/>
-                                                    <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" Margin="0,0,16,0"/>
-                                                    <CheckBox Name="chkRegroupStatusApproved" Content="Approved" Margin="0,0,16,0"/>
-                                                    <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Buttons -->
-                                <WrapPanel>
-                                    <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
-                                    <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
-                                    <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                                    <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Style="{StaticResource MutedButton}" Margin="0,0,0,8"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Function 7 (collapsed by default) -->
-                        <Expander Header="Advanced — Function 7: Manual grouping modes" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,16">
-                            <Border Style="{StaticResource Card}" Margin="0,8,0,0">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource CardBody}">
-                                        Fallback grouper for when Function 6's proximity grouping isn't what you want. Pick a
-                                        primary and (optional) sub-grouping mode by hand. Uses the same test selector,
-                                        template, and status filters from Function 6 above.
-                                    </TextBlock>
-                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Primary grouping mode"/>
-                                    <ComboBox Name="cmbGroupingMode">
-                                        <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
-                                        <ComboBoxItem Content="Level" Tag="Level"/>
-                                        <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
-                                        <ComboBoxItem Content="Selection A (First Element)" Tag="SelectionA"/>
-                                        <ComboBoxItem Content="Selection B (Last Element)" Tag="SelectionB"/>
-                                        <ComboBoxItem Content="Model A" Tag="ModelA"/>
-                                        <ComboBoxItem Content="Model B" Tag="ModelB"/>
-                                        <ComboBoxItem Content="Status" Tag="Status"/>
-                                        <ComboBoxItem Content="Assigned To" Tag="AssignedTo"/>
-                                        <ComboBoxItem Content="Approved By" Tag="ApprovedBy"/>
-                                        <ComboBoxItem Content="File" Tag="File"/>
-                                        <ComboBoxItem Content="Layer" Tag="Layer"/>
-                                        <ComboBoxItem Content="First Element" Tag="First"/>
-                                        <ComboBoxItem Content="Last Element" Tag="Last"/>
-                                        <ComboBoxItem Content="Last Unique Pair" Tag="LastUnique"/>
-                                        <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
-                                    </ComboBox>
-                                    <TextBlock Style="{StaticResource FieldLabel}" Text="Sub-grouping mode (optional)"/>
-                                    <ComboBox Name="cmbSubGroupingMode">
-                                        <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
-                                        <ComboBoxItem Content="Level" Tag="Level"/>
-                                        <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
-                                        <ComboBoxItem Content="Selection A" Tag="SelectionA"/>
-                                        <ComboBoxItem Content="Selection B" Tag="SelectionB"/>
-                                        <ComboBoxItem Content="Model A" Tag="ModelA"/>
-                                        <ComboBoxItem Content="Model B" Tag="ModelB"/>
-                                        <ComboBoxItem Content="Status" Tag="Status"/>
-                                        <ComboBoxItem Content="File" Tag="File"/>
-                                        <ComboBoxItem Content="Layer" Tag="Layer"/>
-                                        <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
-                                    </ComboBox>
-                                    <WrapPanel Margin="0,16,0,0">
-                                        <Button Name="btnFunction7GroupSelected" Content="Group Selected Test (Manual)" Click="OnFunction7GroupSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
-                                        <Button Name="btnFunction7GroupAll" Content="Group All Tests (Manual)" Click="OnFunction7GroupAllClick" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
-                                    </WrapPanel>
-                                </StackPanel>
-                            </Border>
-                        </Expander>
-
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- =============================================================
-                 TAB 5: RENAME
-                 ============================================================= -->
-            <TabItem Header="4. Rename">
+            <TabItem Header="3. Rename">
                 <DockPanel Margin="0,16,0,0" LastChildFill="True">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                         <TextBlock Style="{StaticResource TabTitle}" Text="Rename clash groups"/>
                         <TextBlock Style="{StaticResource TabIntro}">
-                            Pick a test (or "All tests"), choose a naming template, and review the live Current → Proposed
-                            mapping in the grid. Tick the rows you want renamed and click Rename Selected. Walls / Floors
-                            stay untouched regardless.
+                            Browse your clash tests like Clash Detective does. Pick a test to step inside it and see each
+                            group with its current and proposed name; pick "All tests" to multi-select across the project.
+                            Tick the rows you want to rename, choose a preset (or write a custom template), and click
+                            Rename Selected. Walls / Floors groups are preserved by default. Ungrouped clashes show as
+                            virtual rows so you can fold them into the rename batch when "Keep existing names" is off.
                         </TextBlock>
 
                         <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,10">
                             <StackPanel>
+                                <Expander Style="{StaticResource InfoExpander}">
+                                    <StackPanel>
+                                        <TextBlock><Run FontWeight="SemiBold">How browsing works:</Run> Pick a single test in the dropdown to see only that test's groups (clash-detective-style "step inside"). Pick "All tests" to see every group from every test for a multi-test rename. The grid shows Current Name → Proposed Name so you can preview before applying.</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Templates:</Run> Pick a preset OR pick "(custom)" and type your own template in the box below. Drag the tokens into whatever order you like — anything not matching a token (e.g. "Floor", "Level", "-") is treated as literal text and kept verbatim.</TextBlock>
+                                        <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">Keep existing names</Run> (on by default): existing group names stay unchanged; only newly-created/ungrouped rows get the template applied. Uncheck it to let the template overwrite selected groups too.</TextBlock>
+                                    </StackPanel>
+                                </Expander>
                                 <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -798,7 +507,7 @@
                                     </ComboBox>
                                 </Grid>
 
-                                <TextBlock Style="{StaticResource Hint}" Text="Custom template (used when 'custom' preset is selected):" Margin="0,8,0,2"/>
+                                <TextBlock Style="{StaticResource Hint}" Text="Custom template (used when 'custom' preset is selected). Tokens are case-sensitive; everything else is kept verbatim:" Margin="0,8,0,2"/>
                                 <TextBox Name="txtRenameCustomTemplate"
                                          Text="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
                                          TextChanged="OnRenameTemplateChanged"/>
@@ -857,6 +566,203 @@
                         </DataGrid>
                     </Border>
                 </DockPanel>
+            </TabItem>
+
+            <!-- =============================================================
+                 TAB 4: AUTONAVISMATE (one-button + advanced Group & Name)
+                 ============================================================= -->
+            <TabItem Header="4. AutoNAVismate">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4,16,4,4">
+                    <StackPanel MaxWidth="1000" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource TabTitle}" Text="AutoNAVismate"/>
+                        <TextBlock Style="{StaticResource TabIntro}">
+                            Runs every AutoNAV step in sequence with sensible defaults — discipline search sets, element
+                            property sets, clash test generation, walls/floors grouping, and proximity grouping + naming —
+                            in one click. Use this for a brand-new coordination model, or any time you want a clean baseline
+                            before manual review.
+                        </TextBlock>
+
+                        <!-- Big primary CTA -->
+                        <Border Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Style="{StaticResource CardSubtitle}" Text="QUICK START"/>
+                                    <TextBlock Style="{StaticResource CardTitle}" Text="One-button workflow"/>
+                                    <TextBlock Style="{StaticResource CardBody}">
+                                        AutoNAVismate runs Functions 1, 2, 4, 5 and 6 back-to-back. Step 5 uses the
+                                        legacy proximity grouper first (so Walls / Floors stay intact) and then renames
+                                        every non-Walls/Floors group using the default template — the recommended flow
+                                        for consistent, predictable results.
+                                    </TextBlock>
+                                    <Expander Style="{StaticResource InfoExpander}">
+                                        <StackPanel>
+                                            <TextBlock><Run FontWeight="SemiBold">What it does, step by step:</Run></TextBlock>
+                                            <TextBlock>1.  Function 1 — discipline search sets from the loaded model filenames.</TextBlock>
+                                            <TextBlock>2.  Function 2 — element-property search sets, using each discipline's default property.</TextBlock>
+                                            <TextBlock>3.  Function 4 — generate every cross-discipline clash test pair and auto-run them. Structural and Architectural disciplines are placed on the SelectionA side, identified disciplines first.</TextBlock>
+                                            <TextBlock>4.  Function 5 — group Walls / Floors across every clash test.</TextBlock>
+                                            <TextBlock>5.  Function 6 — group remaining clashes by proximity (legacy mode), then rename every group except Walls/Floors using the default naming template.</TextBlock>
+                                            <TextBlock Margin="0,8,0,0"><Run FontWeight="SemiBold">When to use it:</Run> Brand new model that you're coordinating for the first time, or any time you want a clean baseline before manual review in the Rename tab.</TextBlock>
+                                        </StackPanel>
+                                    </Expander>
+                                </StackPanel>
+                                <Button Grid.Column="1" Name="btnAutoNAVismate" Content="Run AutoNAVismate"
+                                        Click="OnAutoNAVismateClick" Style="{StaticResource PrimaryButton}"
+                                        VerticalAlignment="Center" MinWidth="200" Padding="22,14" FontSize="14"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock Name="txtAutoNAVismateProgress" Style="{StaticResource Hint}" Margin="20,-10,20,16"/>
+
+                        <!-- Advanced — Group & Name (Functions 5, 6, 7) -->
+                        <Expander Header="Advanced — group &amp; name controls (Functions 5, 6, 7)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}" Margin="0,0,0,16" IsExpanded="False">
+                            <StackPanel Margin="0,8,0,0">
+                                <TextBlock Style="{StaticResource TabIntro}" Margin="0,0,0,8">
+                                    Run the grouping passes manually when you need different status filters, a specific
+                                    test, or non-proximity grouping modes. Function 5 handles Walls / Floors; Function 6
+                                    is the proximity + template grouper; Function 7 exposes the legacy manual grouping
+                                    modes.
+                                </TextBlock>
+
+                                <!-- Function 5 -->
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 5"/>
+                                        <TextBlock Style="{StaticResource CardTitle}" Text="Group Walls &amp; Floors"/>
+                                        <TextBlock Style="{StaticResource CardBody}">
+                                            For every clash test, collects clashes where one of the items is in a Walls or
+                                            Floors search set and puts them in "Walls" or "Floors" groups respectively. Every
+                                            other tool in AutoNAV preserves these two groups — they never get renamed or regrouped.
+                                        </TextBlock>
+                                        <Button Name="btnFunction6" Content="Group Walls / Floors Across All Tests"
+                                                Click="OnFunction6Click" Style="{StaticResource SuccessButton}"
+                                                HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Function 6 -->
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 6"/>
+                                        <TextBlock Style="{StaticResource CardTitle}" Text="Group by proximity &amp; name with a template"/>
+                                        <TextBlock Style="{StaticResource CardBody}">
+                                            Groups remaining clashes by their nearest grid intersection, then renames each
+                                            cluster with your chosen template. The grouping pass uses the legacy mode first
+                                            (most reliable), then the rename pass applies the template to everything except
+                                            Walls / Floors groups.
+                                        </TextBlock>
+
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Pick a clash test"/>
+                                        <ComboBox Name="cmbClashTest" Margin="0,0,0,4"/>
+
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Naming template"/>
+                                        <ComboBox Name="cmbNamingTemplate" SelectionChanged="OnNamingTemplateChanged" Margin="0,0,0,4">
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                          Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                          IsSelected="True"/>
+                                            <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                          Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
+                                                          Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
+                                                          Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="(none — legacy auto-naming)" Tag=""/>
+                                        </ComboBox>
+                                        <TextBlock Name="txtNamingPreview" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,8"/>
+
+                                        <CheckBox Name="chkKeepExistingGroups" Content="Keep existing groups" IsChecked="True"/>
+
+                                        <!-- Status filters -->
+                                        <Border Style="{StaticResource CardSubtle}" Margin="0,8,0,12">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource FieldLabel}" Text="STATUS FILTERS"/>
+                                                <TextBlock Style="{StaticResource Hint}" Text="New Clashes — these statuses get freshly grouped &amp; named."/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <CheckBox Name="chkNewStatusNew"      Content="New" IsChecked="True" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkNewStatusActive"   Content="Active" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged" Margin="0,0,16,0"/>
+                                                    <CheckBox Name="chkNewStatusReviewed" Content="Under Review" Checked="OnNewStatusChanged" Unchecked="OnNewStatusChanged"/>
+                                                </StackPanel>
+                                                <Border Name="brdRegroup" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+                                                    <StackPanel Name="pnlRegroup" IsEnabled="False" Opacity="0.5">
+                                                        <TextBlock Style="{StaticResource Hint}" Text="Regroup &amp; Rename — re-apply the template to existing groups of these statuses. Only enabled when zero New-Clashes statuses are selected above."/>
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <CheckBox Name="chkRegroupStatusNew"      Content="New" Margin="0,0,16,0"/>
+                                                            <CheckBox Name="chkRegroupStatusActive"   Content="Active" Margin="0,0,16,0"/>
+                                                            <CheckBox Name="chkRegroupStatusReviewed" Content="Under Review" Margin="0,0,16,0"/>
+                                                            <CheckBox Name="chkRegroupStatusApproved" Content="Approved" Margin="0,0,16,0"/>
+                                                            <CheckBox Name="chkRegroupStatusResolved" Content="Resolved"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Buttons -->
+                                        <WrapPanel>
+                                            <Button Name="btnGroupClashes" Content="Group Selected Test" Click="OnGroupClashesClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
+                                            <Button Name="btnGroupAllTests" Content="Group All Tests" Click="OnGroupAllTestsClick" Style="{StaticResource AccentButton}" Margin="0,0,8,8"/>
+                                            <Button Name="btnRenameSelected" Content="Rename Selected Groups" Click="OnRenameSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                                            <Button Name="btnUngroupClashes" Content="Ungroup (Reset)" Click="OnUngroupClashesClick" Style="{StaticResource MutedButton}" Margin="0,0,0,8"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Function 7 -->
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource CardSubtitle}" Text="FUNCTION 7"/>
+                                        <TextBlock Style="{StaticResource CardTitle}" Text="Manual grouping modes (advanced)"/>
+                                        <TextBlock Style="{StaticResource CardBody}">
+                                            Fallback grouper when Function 6's proximity grouping isn't what you want. Pick a
+                                            primary and (optional) sub-grouping mode by hand. Uses the same test selector,
+                                            template, and status filters from Function 6 above.
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Primary grouping mode"/>
+                                        <ComboBox Name="cmbGroupingMode">
+                                            <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
+                                            <ComboBoxItem Content="Level" Tag="Level"/>
+                                            <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
+                                            <ComboBoxItem Content="Selection A (First Element)" Tag="SelectionA"/>
+                                            <ComboBoxItem Content="Selection B (Last Element)" Tag="SelectionB"/>
+                                            <ComboBoxItem Content="Model A" Tag="ModelA"/>
+                                            <ComboBoxItem Content="Model B" Tag="ModelB"/>
+                                            <ComboBoxItem Content="Status" Tag="Status"/>
+                                            <ComboBoxItem Content="Assigned To" Tag="AssignedTo"/>
+                                            <ComboBoxItem Content="Approved By" Tag="ApprovedBy"/>
+                                            <ComboBoxItem Content="File" Tag="File"/>
+                                            <ComboBoxItem Content="Layer" Tag="Layer"/>
+                                            <ComboBoxItem Content="First Element" Tag="First"/>
+                                            <ComboBoxItem Content="Last Element" Tag="Last"/>
+                                            <ComboBoxItem Content="Last Unique Pair" Tag="LastUnique"/>
+                                            <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
+                                        </ComboBox>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Sub-grouping mode (optional)"/>
+                                        <ComboBox Name="cmbSubGroupingMode">
+                                            <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
+                                            <ComboBoxItem Content="Level" Tag="Level"/>
+                                            <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
+                                            <ComboBoxItem Content="Selection A" Tag="SelectionA"/>
+                                            <ComboBoxItem Content="Selection B" Tag="SelectionB"/>
+                                            <ComboBoxItem Content="Model A" Tag="ModelA"/>
+                                            <ComboBoxItem Content="Model B" Tag="ModelB"/>
+                                            <ComboBoxItem Content="Status" Tag="Status"/>
+                                            <ComboBoxItem Content="File" Tag="File"/>
+                                            <ComboBoxItem Content="Layer" Tag="Layer"/>
+                                            <ComboBoxItem Content="Walls and Floors" Tag="WallsAndFloors"/>
+                                        </ComboBox>
+                                        <WrapPanel Margin="0,16,0,0">
+                                            <Button Name="btnFunction7GroupSelected" Content="Group Selected Test (Manual)" Click="OnFunction7GroupSelectedClick" Style="{StaticResource PrimaryButton}" Margin="0,0,8,8"/>
+                                            <Button Name="btnFunction7GroupAll" Content="Group All Tests (Manual)" Click="OnFunction7GroupAllClick" Style="{StaticResource PrimaryButton}" Margin="0,0,0,8"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
     </DockPanel>
