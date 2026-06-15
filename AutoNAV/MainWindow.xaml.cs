@@ -1120,6 +1120,18 @@ namespace AutoNAV
             SetStatus("");
         }
 
+        // Show / hide the full activity log so the status bar can stay one line tall
+        // by default and the function buttons remain visible without scrolling.
+        private void OnStatusToggleClick(object sender, RoutedEventArgs e)
+        {
+            if (svAppStatus == null) return;
+            bool collapsed = svAppStatus.Visibility != System.Windows.Visibility.Visible;
+            svAppStatus.Visibility = collapsed ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+            if (btnStatusToggle != null)
+                btnStatusToggle.Content = collapsed ? "▴ Activity" : "▾ Activity";
+            if (collapsed) svAppStatus.ScrollToBottom();
+        }
+
         // ─────────────────────────────────────────────────────────────────────
         // Rename tab — DataGrid-driven Current → Proposed preview
         // ─────────────────────────────────────────────────────────────────────

@@ -786,10 +786,16 @@ namespace AutoNAV
                 SelectionB = ""
             };
 
-            // Selection A / B: prefer the test's actual selection-set names;
-            // fall back to splitting the test name on " vs ".
-            ctx.SelectionA = ResolveSelectionNames(test, true);
-            ctx.SelectionB = ResolveSelectionNames(test, false);
+            // Selection A / B: prefer the names of the search sets that actually
+            // contain the clashed elements in this group (so a clash between a
+            // Window and a Structural Column is named "Window vs Structural Column",
+            // not the whole selection list). Fall back to the full selection names
+            // when membership can't be resolved, and finally to splitting TestName
+            // on " vs ".
+            ctx.SelectionA = ResolveClashedSetNames(test, group, true);
+            ctx.SelectionB = ResolveClashedSetNames(test, group, false);
+            if (string.IsNullOrEmpty(ctx.SelectionA)) ctx.SelectionA = ResolveSelectionNames(test, true);
+            if (string.IsNullOrEmpty(ctx.SelectionB)) ctx.SelectionB = ResolveSelectionNames(test, false);
             if (string.IsNullOrEmpty(ctx.SelectionA) || string.IsNullOrEmpty(ctx.SelectionB))
             {
                 if (!string.IsNullOrEmpty(ctx.TestName))
@@ -959,6 +965,125 @@ namespace AutoNAV
                 return string.Join(" + ", names);
             }
             catch { return ""; }
+        }
+
+        // Resolves search-set membership for the given side (A or B) into a map of
+        // ModelItem → search-set DisplayName (including walking ancestors so the
+        // composite items returned by ClashResult.CompositeItem1/2 still match
+        // their parent's containing set). Empty map on failure.
+        private static Dictionary<ModelItem, string> BuildSelectionMembershipMap(ClashTest test, bool selectionA)
+        {
+            var map = new Dictionary<ModelItem, string>();
+            if (test == null) return map;
+            try
+            {
+                var clashSel = selectionA ? test.SelectionA : test.SelectionB;
+                if (clashSel == null) return map;
+                var sel = clashSel.Selection;
+                if (sel == null) return map;
+                var doc = Application.MainDocument;
+                if (doc == null) return map;
+
+                foreach (var src in sel.SelectionSources)
+                {
+                    string name;
+                    ModelItemCollection items = null;
+                    try
+                    {
+                        var saved = doc.SelectionSets.ResolveSelectionSource(src);
+                        if (saved == null) continue;
+                        name = saved.DisplayName;
+                        if (string.IsNullOrWhiteSpace(name)) continue;
+
+                        var ss = saved as SelectionSet;
+                        if (ss != null)
+                        {
+                            if (ss.HasSearch)
+                            {
+                                try { items = ss.Search.FindAll(doc, false); } catch { }
+                            }
+                            if (items == null)
+                            {
+                                // Document-resolving overload handles both explicit and
+                                // search-based selection sets.
+                                try { items = ss.GetSelectedItems(doc); } catch { }
+                            }
+                            if (items == null)
+                            {
+                                try { items = ss.GetSelectedItems(); } catch { }
+                            }
+                        }
+                    }
+                    catch { continue; }
+
+                    if (items == null) continue;
+                    foreach (ModelItem mi in items)
+                    {
+                        if (mi != null && !map.ContainsKey(mi)) map[mi] = name;
+                    }
+                }
+            }
+            catch { }
+            return map;
+        }
+
+        // Resolves an item to its containing search-set name by looking up the item
+        // itself, then walking ancestors (composite items returned by ClashResult
+        // typically aren't the same instance as the leaves the search sets return).
+        private static string LookupSetName(ModelItem item, Dictionary<ModelItem, string> map)
+        {
+            if (item == null || map == null || map.Count == 0) return null;
+            if (map.TryGetValue(item, out var n)) return n;
+            try
+            {
+                foreach (ModelItem anc in item.Ancestors)
+                {
+                    if (anc != null && map.TryGetValue(anc, out var an)) return an;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        // For the side requested, walks every ClashResult under this group and
+        // collects the unique names of search sets that the clashed element on
+        // that side belongs to. Returns " + "-joined names, or "" if nothing
+        // could be resolved (caller should fall back to the full selection list).
+        private static string ResolveClashedSetNames(ClashTest test, ClashResultGroup group, bool selectionA)
+        {
+            if (test == null || group == null) return "";
+            var map = BuildSelectionMembershipMap(test, selectionA);
+            if (map.Count == 0) return "";
+
+            var hits = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectClashedSetNames(group, map, selectionA, hits, seen);
+            return string.Join(" + ", hits);
+        }
+
+        private static void CollectClashedSetNames(
+            object container,
+            Dictionary<ModelItem, string> map,
+            bool selectionA,
+            List<string> hits,
+            HashSet<string> seen)
+        {
+            var grp = container as ClashResultGroup;
+            if (grp == null) return;
+            foreach (var child in grp.Children)
+            {
+                var cr = child as ClashResult;
+                if (cr != null)
+                {
+                    ModelItem item = null;
+                    try { item = selectionA ? cr.CompositeItem1 : cr.CompositeItem2; } catch { }
+                    var name = LookupSetName(item, map);
+                    if (!string.IsNullOrEmpty(name) && seen.Add(name)) hits.Add(name);
+                    continue;
+                }
+                var nested = child as ClashResultGroup;
+                if (nested != null) CollectClashedSetNames(nested, map, selectionA, hits, seen);
+            }
         }
 
         // ─────────────────────────────────────────────────────────────
