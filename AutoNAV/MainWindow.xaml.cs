@@ -47,12 +47,48 @@ namespace AutoNAV
             Loaded += MainWindow_Loaded;
         }
 
+        // Set true once the Rename tab has been opened at least once. Guards the
+        // expensive RebuildRenameRows so it never runs at launch (or from a
+        // ComboBox's initial SelectionChanged during InitializeComponent) — only
+        // when the user actually opens the Rename tab.
+        private bool _renameTabReady;
+
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            LoadRenameTree();
-            LoadDisciplineList();
-            LoadFunction3Disciplines();
-            LoadClashTests();
+            // Keep launch lightweight: only the cheap, name-reading loads run
+            // here. Each is isolated so one failure can't abort the others, and
+            // the heavy Rename tab is built lazily the first time it's opened
+            // (see OnMainTabChanged) instead of walking every clash group up
+            // front — that walk resolves search-set membership per group and was
+            // hanging the window on launch.
+            SafeLoad(LoadDisciplineList,    "LoadDisciplineList");
+            SafeLoad(LoadFunction3Disciplines, "LoadFunction3Disciplines");
+            SafeLoad(LoadClashTests,        "LoadClashTests");
+        }
+
+        private static void SafeLoad(Action load, string name)
+        {
+            try { load(); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[AutoNAV] {name} failed: {ex.Message}"); }
+        }
+
+        // Lazily builds a tab's data the first time it's shown so the plugin
+        // opens instantly and processes each section on demand.
+        private void OnMainTabChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // TabControl.SelectionChanged bubbles from inner selectors (the
+            // ComboBoxes on each tab) too; only react to the tab strip itself.
+            if (!ReferenceEquals(e.OriginalSource, sender)) return;
+
+            var tabs = sender as TabControl;
+            var item = tabs?.SelectedItem as TabItem;
+            string header = item?.Header as string;
+            if (header != null && header.IndexOf("Rename", StringComparison.OrdinalIgnoreCase) >= 0
+                && !_renameTabReady)
+            {
+                _renameTabReady = true;
+                SafeLoad(LoadRenameTree, "LoadRenameTree");
+            }
         }
 
         private void LoadClashTests()
@@ -1192,6 +1228,11 @@ namespace AutoNAV
         {
             if (cmbRenameTest == null) return;
 
+            // Refresh membership lookups from the current document, then reuse
+            // them across every group/template/filter change until the next
+            // load or Refresh — so flipping presets in the tab stays instant.
+            ClashGrouper.ResetNamingCaches();
+
             // Hook the row-selection callback once so the counts panel auto-updates.
             RenameRow.OnSelectionChanged = UpdateRenameCounts;
 
@@ -1238,6 +1279,10 @@ namespace AutoNAV
         private void RebuildRenameRows()
         {
             if (dgRenameRows == null || cmbRenameTest == null) return;
+            // Don't do the heavy per-group name resolution until the Rename tab
+            // has actually been opened. ComboBox initial-selection events can
+            // otherwise fire this during window construction and hang launch.
+            if (!_renameTabReady) return;
             _renameRows.Clear();
 
             var selected = cmbRenameTest.SelectedItem as ComboBoxItem;
