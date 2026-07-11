@@ -100,6 +100,10 @@ namespace AutoNAV
                 if (filter.Count == 0) filter = null;
             }
 
+            // Fresh membership lookups per grouping pass, then reused across all
+            // groups of this test rather than rebuilt per group.
+            ResetNamingCaches();
+
             try
             {
                 List<ClashResult> clashResults =
@@ -967,11 +971,53 @@ namespace AutoNAV
             catch { return ""; }
         }
 
+        // Reference-equality comparer so the membership cache keys on the exact
+        // ClashTest instance (Navisworks may override Equals for value semantics).
+        private sealed class RefComparer<T> : IEqualityComparer<T> where T : class
+        {
+            public static readonly RefComparer<T> Instance = new RefComparer<T>();
+            public bool Equals(T a, T b) => ReferenceEquals(a, b);
+            public int GetHashCode(T o) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(o);
+        }
+
+        // Per-(test, side) membership maps. Building one runs a full-model
+        // Search.FindAll for every selection source, so without this cache a
+        // naming/preview pass over N groups of one test would run 2·N full-model
+        // searches. Index 0 = SelectionA, index 1 = SelectionB.
+        private static readonly Dictionary<ClashTest, Dictionary<ModelItem, string>[]> _membershipCache
+            = new Dictionary<ClashTest, Dictionary<ModelItem, string>[]>(RefComparer<ClashTest>.Instance);
+
+        // Clears memoized naming lookups. Call once at the start of each user
+        // operation (group, rename, or preview rebuild) so results reflect the
+        // current search sets while staying fast within that operation.
+        public static void ResetNamingCaches()
+        {
+            _membershipCache.Clear();
+        }
+
+        // Cached front for ComputeSelectionMembershipMap.
+        private static Dictionary<ModelItem, string> BuildSelectionMembershipMap(ClashTest test, bool selectionA)
+        {
+            if (test == null) return new Dictionary<ModelItem, string>();
+
+            int idx = selectionA ? 0 : 1;
+            if (!_membershipCache.TryGetValue(test, out var arr))
+            {
+                arr = new Dictionary<ModelItem, string>[2];
+                _membershipCache[test] = arr;
+            }
+            if (arr[idx] != null) return arr[idx];
+
+            var built = ComputeSelectionMembershipMap(test, selectionA);
+            arr[idx] = built;
+            return built;
+        }
+
         // Resolves search-set membership for the given side (A or B) into a map of
         // ModelItem → search-set DisplayName (including walking ancestors so the
         // composite items returned by ClashResult.CompositeItem1/2 still match
         // their parent's containing set). Empty map on failure.
-        private static Dictionary<ModelItem, string> BuildSelectionMembershipMap(ClashTest test, bool selectionA)
+        private static Dictionary<ModelItem, string> ComputeSelectionMembershipMap(ClashTest test, bool selectionA)
         {
             var map = new Dictionary<ModelItem, string>();
             if (test == null) return map;
@@ -1103,6 +1149,9 @@ namespace AutoNAV
             var doc = Application.MainDocument;
             if (doc == null) return 0;
             var dct = doc.GetClash().TestsData;
+
+            // One membership build for this test, reused across all its groups.
+            ResetNamingCaches();
 
             var seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             int renamed = 0;

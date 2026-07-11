@@ -235,7 +235,7 @@
             <DockPanel Margin="24,18,24,16" LastChildFill="True">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Style="{StaticResource StatusPill}">
-                        <TextBlock Text="v3.10 · NW 2024–2027" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold"/>
+                        <TextBlock Text="v3.11 · NW 2024–2027" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold"/>
                     </Border>
                 </StackPanel>
                 <StackPanel>
@@ -262,7 +262,8 @@
         </Border>
 
         <!-- ===== MAIN TAB CONTROL ===== -->
-        <TabControl Margin="20,16,20,12" Background="Transparent" BorderThickness="0"
+        <TabControl x:Name="mainTabControl" Margin="20,16,20,12" Background="Transparent" BorderThickness="0"
+                    SelectionChanged="OnMainTabChanged"
                     ItemContainerStyle="{StaticResource ModernTabItem}">
             <TabControl.Resources>
                 <Style TargetType="TabPanel">
