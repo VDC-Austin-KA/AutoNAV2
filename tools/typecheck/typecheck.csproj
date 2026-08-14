@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Compiles every AutoNAV source file on any platform, with no Navisworks
+    installation required.
+
+    The Navisworks references come from the Speckle.Navisworks.API package, and
+    MainWindow.g.cs — normally produced by the WPF XAML compiler, which only
+    runs on Windows — is generated from MainWindow.xaml by gen_xaml_stub.py.
+    That makes this a full type check of the plugin, code-behind included:
+
+      python tools/typecheck/gen_xaml_stub.py
+      dotnet build tools/typecheck/typecheck.csproj
+
+    Pass NWPackageVersion to check a specific Navisworks year, which is how
+    this proves every supported year still compiles:
+
+      dotnet build tools/typecheck/typecheck.csproj -p:NWPackageVersion=2025.0.0
+
+    NWYear (used to define the NW<year> constant ClashCompat.cs branches on)
+    is derived automatically from the first 4 characters of NWPackageVersion.
+
+    It does not produce a usable DLL (the real build compiles the XAML); it
+    exists to catch compile errors without a Windows/Navisworks machine.
+  -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>AutoNAV</RootNamespace>
+    <AssemblyName>AutoNAV.Typecheck</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NWPackageVersion Condition="'$(NWPackageVersion)' == ''">2027.0.0</NWPackageVersion>
+    <NWYear>$(NWPackageVersion.Substring(0, 4))</NWYear>
+    <DefineConstants>$(DefineConstants);NW$(NWYear)</DefineConstants>
+    <!-- CS0649: the generated stub's control fields are never assigned. -->
+    <NoWarn>$(NoWarn);CS0649;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="obj/MainWindow.g.cs" />
+    <Compile Include="../../AutoNAV/**/*.cs" Exclude="../../AutoNAV/obj/**/*.cs;../../AutoNAV/bin/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Speckle.Navisworks.API" Version="$(NWPackageVersion)" PrivateAssets="all" ExcludeAssets="runtime" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+</Project>

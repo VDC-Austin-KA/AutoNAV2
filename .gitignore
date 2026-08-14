@@ -1,6 +1,8 @@
 # Build outputs (intermediate and debug artifacts)
 AutoNAV/bin/
 AutoNAV/obj/
+tools/typecheck/bin/
+tools/typecheck/obj/
 
 # Archives
 *.zip
