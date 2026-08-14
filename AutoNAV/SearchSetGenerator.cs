@@ -246,7 +246,13 @@ namespace AutoNAV
                             ? p.Level + "-" + StripSeparatorWrapping(p.Pattern)
                             : StripSeparatorWrapping(p.Pattern);
                         patternEntries.Add((p.Pattern, multiLevel ? p.Level : null, displayName));
-                        DisciplineRegistry[p.DisplayName] =
+                        // Registry must be keyed on the *actual set name* —
+                        // Function 2's LoadDisciplineList and the clash-test
+                        // priority sort look it up by that name.  In multiLevel
+                        // mode the set is "L01-ARCH", not the bare token
+                        // p.DisplayName ("ARCH"); keying on the bare token made
+                        // multiLevel rows resolve to canonical = null.
+                        DisciplineRegistry[displayName] =
                             p.FromDictionary
                                 ? p.CanonicalName
                                 : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);

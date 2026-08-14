@@ -3,6 +3,8 @@ AutoNAV/bin/
 AutoNAV/obj/
 tools/typecheck/bin/
 tools/typecheck/obj/
+tools/leveltest/bin/
+tools/leveltest/obj/
 
 # Archives
 *.zip
