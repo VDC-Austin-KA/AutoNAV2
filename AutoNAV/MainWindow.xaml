@@ -284,6 +284,21 @@
                             most-used; Function 3 is an optional power tool for custom queries.
                         </TextBlock>
 
+                        <!-- Multi-Level Discipline toggle -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardSubtitle}" Text="OPTION"/>
+                                <CheckBox Name="chkMultiLevelDiscipline" Content="Multi-Level Discipline sets"
+                                          IsChecked="False" Margin="0,4,0,0"/>
+                                <TextBlock Style="{StaticResource CardBody}">
+                                    Off (default): behaviour is unchanged — Function 1 makes one set per discipline
+                                    (e.g. "ARCH"), Function 2 names sets after the raw property value (e.g. "Walls").
+                                    On: Function 1 makes one set per discipline PER LEVEL (e.g. "L01-ARCH"), and
+                                    Function 2 carries that into its names (e.g. "L01-ARCH-Walls").
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Function 1 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel>

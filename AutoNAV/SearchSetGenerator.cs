@@ -20,6 +20,9 @@ namespace AutoNAV
             public string DisplayName { get; set; }
             public string SearchPattern { get; set; }
             public List<string> MatchedFiles { get; set; }
+            // Normalised level code (e.g. "L01") captured from the source
+            // filename, or null when none was found. See DisciplinePick.Level.
+            public string Level { get; set; }
         }
 
         // Registry populated by GenerateFunction1SearchSets: discipline
@@ -119,7 +122,14 @@ namespace AutoNAV
         //     - User can edit display names and search patterns
         //     - Creates search sets from user-confirmed selections
         // ─────────────────────────────────────────────────────────────────────
-        public static void GenerateFunction1SearchSets()
+        public static void GenerateFunction1SearchSets() => GenerateFunction1SearchSets(false);
+
+        // multiLevel = false reproduces today's behaviour byte-for-byte (one
+        // set per discipline, named "ARCH"). multiLevel = true keys the
+        // de-dupe on (pattern, level) instead of pattern alone, so per-level
+        // variants of a discipline no longer collapse into one set, and names
+        // the result "L01-ARCH".
+        public static void GenerateFunction1SearchSets(bool multiLevel)
         {
             try
             {
@@ -219,13 +229,23 @@ namespace AutoNAV
                 // Collapse to unique patterns (multiple files can share one
                 // discipline → one search set).  Patterns are bare tokens now,
                 // so the display name == pattern.
+                //
+                // multiLevel keys the de-dupe on (pattern, level) instead of
+                // pattern alone, so files that would otherwise collapse into
+                // one discipline set (e.g. "-ARCH-L01" and "-ARCH-L02" both
+                // reducing to "ARCH") instead produce one set per level,
+                // named "L01-ARCH".
                 var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var patterns = new List<string>();
+                var patternEntries = new List<(string Pattern, string Level, string DisplayName)>();
                 foreach (var p in picks)
                 {
-                    if (seenPatterns.Add(p.Pattern))
+                    string dedupeKey = multiLevel ? (p.Pattern + "|" + (p.Level ?? "")) : p.Pattern;
+                    if (seenPatterns.Add(dedupeKey))
                     {
-                        patterns.Add(p.Pattern);
+                        string displayName = (multiLevel && !string.IsNullOrEmpty(p.Level))
+                            ? p.Level + "-" + StripSeparatorWrapping(p.Pattern)
+                            : StripSeparatorWrapping(p.Pattern);
+                        patternEntries.Add((p.Pattern, multiLevel ? p.Level : null, displayName));
                         DisciplineRegistry[p.DisplayName] =
                             p.FromDictionary
                                 ? p.CanonicalName
@@ -265,9 +285,9 @@ namespace AutoNAV
                 int skipped = 0;
                 var errors = new List<string>();
 
-                foreach (string pattern in patterns)
+                foreach (var entry in patternEntries)
                 {
-                    string displayName = StripSeparatorWrapping(pattern);
+                    string displayName = entry.DisplayName;
                     if (existing.Contains(displayName)) { skipped++; continue; }
 
                     // Refresh folder reference each iteration
@@ -282,7 +302,13 @@ namespace AutoNAV
                         search.Selection.SelectAll();
                         search.SearchConditions.Add(
                             SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
-                                .DisplayStringContains(pattern));
+                                .DisplayStringContains(entry.Pattern));
+                        if (multiLevel && !string.IsNullOrEmpty(entry.Level))
+                        {
+                            search.SearchConditions.Add(
+                                SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
+                                    .DisplayStringContains(entry.Level));
+                        }
 
                         var ss = new SelectionSet(search) { DisplayName = displayName };
 
@@ -292,18 +318,18 @@ namespace AutoNAV
                     }
                     catch (Exception ex)
                     {
-                        errors.Add(string.Format("'{0}' (pattern: '{1}'): {2}", displayName, pattern, ex.Message));
+                        errors.Add(string.Format("'{0}' (pattern: '{1}'): {2}", displayName, entry.Pattern, ex.Message));
                     }
                 }
 
                 string msg = string.Format("Function 1 complete.\nModels detected: {0}\nPatterns derived: {1}\nCreated: {2}  |  Skipped (existing): {3}",
-                    allFileNames.Count, patterns.Count, created, skipped);
+                    allFileNames.Count, patternEntries.Count, created, skipped);
 
                 if (errors.Count > 0)
                     msg += "\n\nErrors:\n" + string.Join("\n", errors);
 
-                if (patterns.Count > 0)
-                    msg += "\n\nPatterns: " + string.Join(", ", patterns.Select(p => StripSeparatorWrapping(p)));
+                if (patternEntries.Count > 0)
+                    msg += "\n\nPatterns: " + string.Join(", ", patternEntries.Select(p => p.DisplayName));
 
                 if (allFileNames.Count > 0 && allFileNames.Count <= 20)
                     msg += "\n\nFiles: " + string.Join(", ", allFileNames);
@@ -364,6 +390,15 @@ namespace AutoNAV
         // Parameter version - for programmatic use
         public static void GenerateFunction2SearchSets(
             List<string> selectedDisciplines, string propCat, string propName)
+            => GenerateFunction2SearchSets(selectedDisciplines, propCat, propName, false);
+
+        // multiLevel = false reproduces today's behaviour byte-for-byte (set
+        // named after the raw property value, e.g. "Walls"). multiLevel =
+        // true names the set "<discipline>-<value>" — since with the toggle
+        // on, `discipline` is already the Function-1 name "L01-ARCH", the
+        // result reads "L01-ARCH-Walls" with no separate level parsing needed.
+        public static void GenerateFunction2SearchSets(
+            List<string> selectedDisciplines, string propCat, string propName, bool multiLevel)
         {
             try
             {
@@ -471,13 +506,18 @@ namespace AutoNAV
 
                     foreach (string value in values)
                     {
+                        // multiLevel: discipline is already the Function-1 name
+                        // "L01-ARCH", so prefixing it yields "L01-ARCH-Walls"
+                        // with no separate level parsing needed.
+                        string setName = multiLevel ? (discipline + "-" + value) : value;
+
                         root        = doc.SelectionSets.RootItem as GroupItem;
                         clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
                         discFolder  = clashFolder != null ? FindFolder(clashFolder, discipline) : null;
                         if (discFolder == null) break;
 
                         bool exists = discFolder.Children.OfType<SavedItem>()
-                            .Any(c => c.DisplayName.Equals(value, StringComparison.OrdinalIgnoreCase));
+                            .Any(c => c.DisplayName.Equals(setName, StringComparison.OrdinalIgnoreCase));
                         if (exists) continue;
 
                         try
@@ -492,7 +532,7 @@ namespace AutoNAV
                                 SearchCondition.HasPropertyByDisplayName(propCat, propName)
                                     .EqualValue(VariantData.FromDisplayString(value)));
 
-                            var ss = new SelectionSet(search) { DisplayName = value };
+                            var ss = new SelectionSet(search) { DisplayName = setName };
 
                             selSets.AddCopy(discFolder, ss);
                             totalCreated++;
@@ -737,6 +777,11 @@ namespace AutoNAV
             public string SourceFile;       // the filename it came from
             public bool FromDictionary;     // true if step 2 hit, false for fallback
             public string CanonicalName;    // "Architectural" etc. when FromDictionary
+            // Normalised level code (e.g. "L01"/"B02") parsed from a level-code
+            // segment (IsLevelCode) in the source filename via
+            // ClashGrouper.NormaliseLevel, or null when the filename has none.
+            // Only consumed when the Multi-Level Discipline toggle is on.
+            public string Level;
         }
 
         internal static List<DisciplinePick> ClassifyFiles(List<string> fileNamesNoExt)
@@ -770,9 +815,23 @@ namespace AutoNAV
                 kv => kv.Value.Where(s => !IsLevelCode(s)).Where(s => !universal.Contains(s)).ToList(),
                 StringComparer.OrdinalIgnoreCase);
 
+            // Capture (rather than discard) the level-code segment stripped
+            // above, canonicalised via ClashGrouper.NormaliseLevel so "L3" and
+            // "L03" agree. Only consumed when the Multi-Level Discipline
+            // toggle is on; null when the filename has no level segment.
+            var fileLevels = fileSegments.ToDictionary(
+                kv => kv.Key,
+                kv =>
+                {
+                    string raw = kv.Value.FirstOrDefault(IsLevelCode);
+                    return raw != null ? ClashGrouper.NormaliseLevel(raw) : null;
+                },
+                StringComparer.OrdinalIgnoreCase);
+
             foreach (string file in allFiles)
             {
                 var tokens = candidates[file];
+                string level = fileLevels[file];
 
                 // Stage 1: dictionary hit.  Walk candidates in original order;
                 // first token that matches a discipline wins.
@@ -801,6 +860,7 @@ namespace AutoNAV
                         SourceFile = file,
                         FromDictionary = true,
                         CanonicalName = hitCanonical,
+                        Level = level,
                     });
                     continue;
                 }
@@ -814,6 +874,7 @@ namespace AutoNAV
                     SourceFile = file,
                     FromDictionary = false,
                     CanonicalName = null,
+                    Level = level,
                 });
             }
 
@@ -976,6 +1037,7 @@ namespace AutoNAV
                         DisplayName = p.DisplayName,
                         SearchPattern = p.Pattern,
                         MatchedFiles = new List<string>(),
+                        Level = p.Level,
                     };
                     byPattern[p.Pattern] = existing;
                     ordered.Add(existing);
