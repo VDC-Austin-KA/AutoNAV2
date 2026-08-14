@@ -283,7 +283,7 @@ namespace AutoNAV
         {
             try
             {
-                SearchSetGenerator.GenerateFunction1SearchSets();
+                SearchSetGenerator.GenerateFunction1SearchSets(chkMultiLevelDiscipline.IsChecked == true);
                 LoadDisciplineList();
                 LoadFunction3Disciplines();
             }
@@ -316,7 +316,7 @@ namespace AutoNAV
                     string propCat = parts[0];
                     string propName = parts.Length > 1 ? parts[1] : "Category";
 
-                    SearchSetGenerator.GenerateFunction2SearchSets(discs, propCat, propName);
+                    SearchSetGenerator.GenerateFunction2SearchSets(discs, propCat, propName, chkMultiLevelDiscipline.IsChecked == true);
                 }
 
                 NotifyInfo("Function 2 complete.");
@@ -929,7 +929,7 @@ namespace AutoNAV
             try
             {
                 SetAutoProgress("Step 1/5  Function 1 — discipline search sets…");
-                SearchSetGenerator.GenerateFunction1SearchSets();
+                SearchSetGenerator.GenerateFunction1SearchSets(chkMultiLevelDiscipline.IsChecked == true);
 
                 SetAutoProgress("Step 2/5  Function 2 — element-property search sets…");
                 // Refresh the discipline UI then run Function 2 with the

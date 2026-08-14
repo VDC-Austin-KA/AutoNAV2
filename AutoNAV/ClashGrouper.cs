@@ -862,7 +862,7 @@ namespace AutoNAV
 
         // Converts "Level 3", "L3", "L03", "Floor 03" to "L03"; "Basement 1" / "B1" to "B01";
         // returns the original string if no clean pattern matches.
-        private static string NormaliseLevel(string raw)
+        internal static string NormaliseLevel(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw)) return raw;
             string s = raw.Trim();
