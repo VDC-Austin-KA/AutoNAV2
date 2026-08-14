@@ -13,6 +13,7 @@
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <UseWPF>true</UseWPF>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
   <!-- Debug x64 -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
