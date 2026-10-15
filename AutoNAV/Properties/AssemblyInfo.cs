@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("AutoNAV")]
-[assembly: AssemblyDescription("Automated Search Set Creation & Clash Test Generation for Navisworks\nVersion: 3.0\nSupported: Navisworks 2024, 2025, 2026")]
+[assembly: AssemblyDescription("Automated Search Set Creation & Clash Test Generation for Navisworks\nVersion: 3.0\nSupported: Navisworks 2024, 2025, 2026, 2027")]
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyCompany("Keith Acker")]
 [assembly: AssemblyProduct("AutoNAV")]
