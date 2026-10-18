@@ -441,116 +441,98 @@ namespace AutoNAV
                 }
 
                 int totalCreated = 0;
+                int totalSkipped = 0;
+                int done = 0;
+                bool cancelled = false;
                 var errors = new List<string>();
+                // Disciplines that share a model (e.g. multi-level sets) reuse its scan.
+                var scanCache = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                Func<GroupItem> clashParent = () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER);
 
-                foreach (string discipline in selectedDisciplines)
+                // Each discipline is scanned and committed on its own, so the
+                // progress dialog can name the current step, and a cancel (or a
+                // failure part-way) keeps every discipline already finished.
+                // Re-running resumes: sets that already exist are skipped.
+                int total = selectedDisciplines.Count;
+                Progress progress = NavApp.BeginProgress("AutoNAV — Function 2", "Preparing…");
+                try
                 {
-                    root        = doc.SelectionSets.RootItem as GroupItem;
-                    clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
-                    if (clashFolder == null) break;
-
-                    // Find the discipline search set under "1. DISCIPLINES"
-                    discSourceFolder = FindFolder(root, DISCIPLINES_FOLDER);
-                    SavedItem discSearchSet = null;
-                    if (discSourceFolder != null)
+                    foreach (string discipline in selectedDisciplines)
                     {
-                        discSearchSet = discSourceFolder.Children
-                            .OfType<SavedItem>()
-                            .FirstOrDefault(c => c.DisplayName.Trim()
-                                .Equals(discipline, StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (discSearchSet == null)
-                    {
-                        errors.Add(string.Format("'{0}': no matching search set in {1}", discipline, DISCIPLINES_FOLDER));
-                        continue;
-                    }
-
-                    // Create a SelectionSource from the discipline search set
-                    SelectionSource discSource = selSets.CreateSelectionSource(discSearchSet);
-                    if (discSource == null)
-                    {
-                        errors.Add(string.Format("'{0}': failed to create SelectionSource", discipline));
-                        continue;
-                    }
-
-                    string searchPattern = discipline;
-                    if (discSearchSet is SelectionSet)
-                    {
-                        SelectionSet selSet = discSearchSet as SelectionSet;
-                        string extracted = GetSearchPatternFromSet(selSet);
-                        if (!string.IsNullOrEmpty(extracted))
-                            searchPattern = extracted;
-                    }
-
-                    // Find all models whose filename contains this discipline pattern
-                    List<Model> discModels = FindModelsForDiscipline(doc, searchPattern);
-                    if (discModels.Count == 0)
-                    {
-                        errors.Add(string.Format("'{0}': no matching model files found", discipline));
-                        continue;
-                    }
-
-                    // Enumerate unique property values from those models
-                    List<string> values = EnumeratePropertyValuesFromModels(discModels, propCat, propName);
-                    if (values.Count == 0)
-                    {
-                        errors.Add(string.Format("'{0}': no '{1}/{2}' values found", discipline, propCat, propName));
-                        continue;
-                    }
-
-                    // Find or create discipline subfolder under "2. CLASH SETS"
-                    FolderItem discFolder = FindFolder(clashFolder, discipline);
-                    if (discFolder == null)
-                    {
-                        selSets.AddCopy(clashFolder, new FolderItem { DisplayName = discipline });
-                        root        = doc.SelectionSets.RootItem as GroupItem;
-                        clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
-                        discFolder  = clashFolder != null ? FindFolder(clashFolder, discipline) : null;
-                    }
-                    if (discFolder == null) continue;
-
-                    foreach (string value in values)
-                    {
-                        // multiLevel: discipline is already the Function-1 name
-                        // "L01-ARCH", so prefixing it yields "L01-ARCH-Walls"
-                        // with no separate level parsing needed.
-                        string setName = multiLevel ? (discipline + "-" + value) : value;
-
-                        root        = doc.SelectionSets.RootItem as GroupItem;
-                        clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
-                        discFolder  = clashFolder != null ? FindFolder(clashFolder, discipline) : null;
-                        if (discFolder == null) break;
-
-                        bool exists = discFolder.Children.OfType<SavedItem>()
-                            .Any(c => c.DisplayName.Equals(setName, StringComparison.OrdinalIgnoreCase));
-                        if (exists) continue;
-
+                        if (progress.IsCanceled) { cancelled = true; break; }
+                        string step = string.Format("[{0}/{1}] {2}", done + 1, total, discipline);
+                        progress.BeginSubOperation(1.0 / (total - done), step);
                         try
                         {
-                            // Scope search to the discipline's search set (Sets mode)
-                            // This produces locator: lcop_selection_set_tree/1. DISCIPLINES/<discipline>
-                            var search = new Search();
-                            search.Locations = SearchLocations.DescendantsAndSelf;
-                            search.Selection.SelectionSources.Add(discSource);
+                            SavedItem discSearchSet = FindDisciplineSet(doc, discipline);
+                            if (discSearchSet == null)
+                            {
+                                errors.Add(string.Format("'{0}': no matching search set in {1}", discipline, DISCIPLINES_FOLDER));
+                                continue;
+                            }
 
-                            search.SearchConditions.Add(
-                                SearchCondition.HasPropertyByDisplayName(propCat, propName)
-                                    .EqualValue(VariantData.FromDisplayString(value)));
+                            // Create a SelectionSource from the discipline search set
+                            SelectionSource discSource = selSets.CreateSelectionSource(discSearchSet);
+                            if (discSource == null)
+                            {
+                                errors.Add(string.Format("'{0}': failed to create SelectionSource", discipline));
+                                continue;
+                            }
 
-                            var ss = new SelectionSet(search) { DisplayName = setName };
+                            List<Model> discModels = ModelsForDisciplineSet(doc, discSearchSet, discipline);
+                            if (discModels.Count == 0)
+                            {
+                                errors.Add(string.Format("'{0}': no matching model files found", discipline));
+                                continue;
+                            }
 
-                            selSets.AddCopy(discFolder, ss);
-                            totalCreated++;
+                            progress.BeginSubOperation(0.9, step + " — reading values");
+                            List<string> values;
+                            try { values = ScanPropertyValues(doc, discModels, propCat, propName, progress, step, scanCache); }
+                            finally { progress.EndSubOperation(); }
+                            if (values == null) { cancelled = true; break; }
+                            if (values.Count == 0)
+                            {
+                                errors.Add(string.Format("'{0}': no '{1}/{2}' values found", discipline, propCat, propName));
+                                continue;
+                            }
+
+                            var sets = new List<SelectionSet>();
+                            foreach (string value in values)
+                            {
+                                // multiLevel: discipline is already the Function-1 name
+                                // "L01-ARCH", so prefixing it yields "L01-ARCH-Walls"
+                                // with no separate level parsing needed.
+                                string setName = multiLevel ? (discipline + "-" + value) : value;
+                                try { sets.Add(PropertyValueSet(discSource, propCat, propName, value, setName)); }
+                                catch (Exception ex) { errors.Add(string.Format("'{0}/{1}': {2}", discipline, value, ex.Message)); }
+                            }
+
+                            progress.BeginSubOperation(1.0, string.Format("{0} — saving {1} search set(s)", step, sets.Count));
+                            try
+                            {
+                                var r = CommitSets(doc, clashParent, discipline, sets, progress, errors);
+                                totalCreated += r.Created;
+                                totalSkipped += r.Skipped;
+                            }
+                            finally { progress.EndSubOperation(); }
                         }
-                        catch (Exception ex)
+                        finally
                         {
-                            errors.Add(string.Format("'{0}/{1}': {2}", discipline, value, ex.Message));
+                            progress.EndSubOperation();
+                            if (!cancelled) done++;
                         }
                     }
                 }
+                finally
+                {
+                    NavApp.EndProgress();
+                }
 
-                string msg = string.Format("Function 2 complete.\nCreated {0} new search set(s) in '{1}'.", totalCreated, CLASH_SETS_FOLDER);
+                string msg = string.Format("Function 2 {0}.\nDisciplines processed: {1} of {2}\nCreated {3} new search set(s) in '{4}'  |  Skipped (existing): {5}",
+                    cancelled ? "cancelled" : "complete", done, total, totalCreated, CLASH_SETS_FOLDER, totalSkipped);
+                if (cancelled)
+                    msg += "\n\nSets created before cancelling were kept. Run Function 2 again to resume — existing sets are skipped.";
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
 
@@ -995,35 +977,189 @@ namespace AutoNAV
             return pattern;
         }
 
-        private static string GetSearchPatternFromSet(SelectionSet selectionSet)
+        // Every search term of a Function-1 set: the discipline token and, for
+        // multi-level sets, the level code.
+        private static List<string> GetSearchPatternsFromSet(SelectionSet selectionSet)
         {
-            if (selectionSet == null) return null;
-            if (selectionSet.Search == null) return null;
-            if (selectionSet.Search.SearchConditions == null) return null;
+            var result = new List<string>();
+            if (selectionSet?.Search?.SearchConditions == null) return result;
             foreach (SearchCondition cond in selectionSet.Search.SearchConditions)
             {
-                if (cond.Value != null)
-                {
-                    string val = cond.Value.ToDisplayString();
-                    if (!string.IsNullOrEmpty(val)) return val;
-                }
+                string val = cond.Value?.ToDisplayString();
+                if (!string.IsNullOrEmpty(val)) result.Add(val);
             }
-            return null;
+            return result;
         }
 
-        // Return all models whose filename contains the given search pattern.
-        private static List<Model> FindModelsForDiscipline(Document doc, string searchPattern)
+        private static string ModelFileName(Model m)
+        {
+            string raw = !string.IsNullOrEmpty(m.FileName) ? m.FileName : m.SourceFileName;
+            return System.IO.Path.GetFileNameWithoutExtension(raw ?? "");
+        }
+
+        // Return all models whose filename contains every one of the patterns.
+        private static List<Model> FindModelsForDiscipline(Document doc, List<string> patterns)
         {
             var result = new List<Model>();
             for (int i = 0; i < doc.Models.Count; i++)
             {
-                Model  m        = doc.Models[i];
-                string raw      = !string.IsNullOrEmpty(m.FileName) ? m.FileName : m.SourceFileName;
-                string fileNoExt = System.IO.Path.GetFileNameWithoutExtension(raw ?? "");
-                if (fileNoExt.IndexOf(searchPattern, StringComparison.OrdinalIgnoreCase) >= 0)
+                Model  m         = doc.Models[i];
+                string fileNoExt = ModelFileName(m);
+                if (patterns.All(p => fileNoExt.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0))
                     result.Add(m);
             }
             return result;
+        }
+
+        // The models a discipline set actually covers. Matching on all of the
+        // set's terms (not just the first) keeps a multi-level "L01-ARCH" set
+        // from scanning L02's models and producing sets that select nothing;
+        // it also works when the set was renamed away from its pattern.
+        private static List<Model> ModelsForDisciplineSet(Document doc, SavedItem discSet, string discipline)
+        {
+            var patterns = GetSearchPatternsFromSet(discSet as SelectionSet);
+            if (patterns.Count == 0) patterns.Add(discipline);
+            return FindModelsForDiscipline(doc, patterns);
+        }
+
+        private static SavedItem FindDisciplineSet(Document doc, string discipline)
+        {
+            FolderItem folder = FindFolder(doc.SelectionSets.RootItem as GroupItem, DISCIPLINES_FOLDER);
+            return folder?.Children.FirstOrDefault(c => c.DisplayName.Trim()
+                .Equals(discipline, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Scope search to the discipline's search set (Sets mode)
+        // This produces locator: lcop_selection_set_tree/1. DISCIPLINES/<discipline>
+        private static SelectionSet PropertyValueSet(
+            SelectionSource discSource, string propCat, string propName, string value, string setName)
+        {
+            var search = new Search();
+            search.Locations = SearchLocations.DescendantsAndSelf;
+            search.Selection.SelectionSources.Add(discSource);
+            search.SearchConditions.Add(
+                SearchCondition.HasPropertyByDisplayName(propCat, propName)
+                    .EqualValue(VariantData.FromDisplayString(value)));
+            return new SelectionSet(search) { DisplayName = setName };
+        }
+
+        // Writes `sets` into the `folderName` subfolder of the group `getParent`
+        // resolves. A new subfolder is built in memory and added with ONE
+        // AddCopy — one document edit and one Sets-window refresh instead of
+        // one per set, which is what made large runs crawl. An existing
+        // subfolder (re-run / resume) only receives the sets it lacks.
+        private static (int Created, int Skipped) CommitSets(
+            Document doc, Func<GroupItem> getParent, string folderName,
+            List<SelectionSet> sets, Progress progress, List<string> errors)
+        {
+            GroupItem parent = getParent();
+            if (parent == null) { errors.Add("Lost reference to the parent folder of '" + folderName + "'"); return (0, 0); }
+
+            FolderItem live = FindFolder(parent, folderName);
+            if (live == null)
+            {
+                try
+                {
+                    var folder = new FolderItem { DisplayName = folderName };
+                    foreach (var ss in sets) folder.Children.Add(ss);
+                    doc.SelectionSets.AddCopy(parent, folder);
+                    return (sets.Count, 0);
+                }
+                catch (Exception ex)
+                {
+                    // Fall back to adding the sets one at a time below.
+                    Debug.WriteLine(string.Format("[AutoNAV] Batch add of '{0}' failed: {1}", folderName, ex.Message));
+                    live = FindFolder(getParent(), folderName);
+                    if (live == null)
+                    {
+                        doc.SelectionSets.AddCopy(getParent(), new FolderItem { DisplayName = folderName });
+                        live = FindFolder(getParent(), folderName);
+                    }
+                    if (live == null) { errors.Add("Failed to create folder '" + folderName + "'"); return (0, 0); }
+                }
+            }
+
+            var existing = new HashSet<string>(live.Children.Select(c => c.DisplayName), StringComparer.OrdinalIgnoreCase);
+            int created = 0, skipped = 0;
+            for (int i = 0; i < sets.Count; i++)
+            {
+                if (!existing.Add(sets[i].DisplayName)) { skipped++; continue; }
+                if (!progress.Update((double)i / sets.Count)) break;
+
+                // Folder references go stale after each document edit.
+                live = FindFolder(getParent(), folderName);
+                if (live == null) { errors.Add("Lost reference to '" + folderName + "'"); break; }
+                try
+                {
+                    doc.SelectionSets.AddCopy(live, sets[i]);
+                    created++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(string.Format("'{0}/{1}': {2}", folderName, sets[i].DisplayName, ex.Message));
+                }
+            }
+            return (created, skipped);
+        }
+
+        // Unique propCat/propName values across `models`, read one model at a
+        // time so the progress dialog names the model being scanned. A native
+        // Search returns only the items that carry the property, instead of
+        // walking every node's property categories in managed code (the bulk
+        // of the old run time on large models). `cache` lets disciplines that
+        // share a model reuse its scan. Returns null when the user cancels.
+        private static List<string> ScanPropertyValues(
+            Document doc, List<Model> models, string propCat, string propName,
+            Progress progress, string step, Dictionary<string, HashSet<string>> cache)
+        {
+            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < models.Count; i++)
+            {
+                Model  model = models[i];
+                string file  = ModelFileName(model);
+                string key   = file + "|" + propCat + "|" + propName;
+                if (!cache.TryGetValue(key, out HashSet<string> modelValues))
+                {
+                    modelValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    progress.BeginSubOperation(1.0 / (models.Count - i),
+                        string.Format("{0} — reading '{1}/{2}' from model {3}/{4}: {5}",
+                            step, propCat, propName, i + 1, models.Count, file));
+                    try
+                    {
+                        var search = new Search();
+                        search.Selection.CopyFrom(new[] { model.RootItem });
+                        search.Locations = SearchLocations.DescendantsAndSelf;
+                        search.PruneBelowMatch = false;
+                        search.SearchConditions.Add(SearchCondition.HasPropertyByDisplayName(propCat, propName));
+                        ModelItemCollection hits = search.FindAll(doc, false);
+
+                        int n = 0, count = hits.Count;
+                        foreach (ModelItem item in hits)
+                        {
+                            if (++n % 500 == 0 && !progress.Update((double)n / count)) return null;
+                            try
+                            {
+                                string val = item.PropertyCategories
+                                    .FindPropertyByDisplayName(propCat, propName)?.Value?.ToDisplayString();
+                                if (!string.IsNullOrWhiteSpace(val)) modelValues.Add(val);
+                            }
+                            catch { }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(string.Format("[AutoNAV] Property scan error ({0}): {1}", file, ex.Message));
+                    }
+                    finally
+                    {
+                        progress.EndSubOperation();
+                    }
+                    if (progress.IsCanceled) return null;
+                    cache[key] = modelValues;
+                }
+                values.UnionWith(modelValues);
+            }
+            return values.OrderBy(v => v).ToList();
         }
 
         internal static List<DisciplinePatternResult> ComputeDisciplinePatternsDetailed(List<string> fileNamesNoExt)
@@ -1155,75 +1291,6 @@ namespace AutoNAV
             }
         }
 
-        // Enumerate unique property values from elements across a list of models.
-        private static List<string> EnumeratePropertyValuesFromModels(
-            List<Model> models, string propCat, string propName)
-        {
-            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            const int maxItemsPerModel = 100000; // Increased from 10000
-
-            foreach (Model model in models)
-            {
-                int count = 0;
-                try
-                {
-                    CollectPropertyValues(model.RootItem, propCat, propName,
-                                          values, ref count, maxItemsPerModel);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine(string.Format("Enumerate error ({0}): {1}", model.FileName, ex.Message));
-                }
-            }
-
-            return values.OrderBy(v => v).ToList();
-        }
-
-        // Recursive depth-first property value collector.
-        private static void CollectPropertyValues(
-            ModelItem item, string propCat, string propName,
-            HashSet<string> values, ref int count, int maxItems)
-        {
-            if (count >= maxItems) return;
-            if (item == null) return;
-
-            try
-            {
-                foreach (PropertyCategory cat in item.PropertyCategories)
-                {
-                    if (cat.DisplayName == null) continue;
-                    if (!cat.DisplayName.Equals(propCat, StringComparison.OrdinalIgnoreCase)) continue;
-                    foreach (DataProperty prop in cat.Properties)
-                    {
-                        if (prop.DisplayName == null) continue;
-                        if (!prop.DisplayName.Equals(propName, StringComparison.OrdinalIgnoreCase)) continue;
-                        try
-                        {
-                            string val = prop.Value.ToDisplayString();
-                            if (!string.IsNullOrWhiteSpace(val)) 
-                            {
-                                values.Add(val);
-                                count++;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-            }
-            catch { }
-
-            // Traverse children
-            try
-            {
-                foreach (ModelItem child in item.Children)
-                {
-                    CollectPropertyValues(child, propCat, propName, values, ref count, maxItems);
-                    if (count >= maxItems) return;
-                }
-            }
-            catch { }
-        }
-
         // ─────────────────────────────────────────────────────────────────────
         // Function 3 — Custom Search Set Creation from Property Values
         // Similar to Function 2, but allows user to select property from model
@@ -1275,15 +1342,29 @@ namespace AutoNAV
                 Document doc = NavApp.ActiveDocument;
                 if (doc == null) return result;
 
-                List<Model> models = FindModelsForDiscipline(doc, discipline);
+                List<Model> models = ModelsForDisciplineSet(doc, FindDisciplineSet(doc, discipline), discipline);
                 if (models.Count == 0) return result;
 
                 var categorySet = new HashSet<string>();
 
-                foreach (Model model in models)
+                // Every node is visited, so large models take a while: name the
+                // model being read, and let Cancel keep the categories found so far.
+                Progress progress = NavApp.BeginProgress("AutoNAV — Function 3", "Reading property categories…");
+                try
                 {
-                    try { CollectPropertyCategories(model.RootItem, categorySet, result); }
-                    catch { }
+                    for (int i = 0; i < models.Count && !progress.IsCanceled; i++)
+                    {
+                        progress.BeginSubOperation(1.0 / (models.Count - i), string.Format(
+                            "{0} — reading property categories from model {1}/{2}: {3}",
+                            discipline, i + 1, models.Count, ModelFileName(models[i])));
+                        try { CollectPropertyCategories(models[i].RootItem, categorySet, result, progress); }
+                        catch { }
+                        finally { progress.EndSubOperation(); }
+                    }
+                }
+                finally
+                {
+                    NavApp.EndProgress();
                 }
             }
             catch { }
@@ -1291,67 +1372,46 @@ namespace AutoNAV
         }
 
         private static void CollectPropertyCategories(
-            ModelItem item, 
-            HashSet<string> categorySet, 
-            List<PropertyCategoryInfo> result)
+            ModelItem root,
+            HashSet<string> categorySet,
+            List<PropertyCategoryInfo> result,
+            Progress progress)
         {
-            if (item == null) return;
+            if (root == null) return;
 
-            foreach (PropertyCategory cat in item.PropertyCategories)
+            int n = 0;
+            foreach (ModelItem item in root.DescendantsAndSelf)
             {
-                string catName = cat.DisplayName;
-                if (string.IsNullOrEmpty(catName)) continue;
+                // No cheap total to report against; Update keeps the dialog
+                // responsive and is where Cancel is picked up.
+                if (++n % 2000 == 0 && !progress.Update(0)) return;
 
-                if (categorySet.Add(catName))
+                foreach (PropertyCategory cat in item.PropertyCategories)
                 {
-                    var catInfo = new PropertyCategoryInfo
-                    {
-                        DisplayName = catName,
-                        InternalName = cat.Name
-                    };
+                    string catName = cat.DisplayName;
+                    if (string.IsNullOrEmpty(catName)) continue;
 
-                    foreach (DataProperty prop in cat.Properties)
+                    if (categorySet.Add(catName))
                     {
-                        catInfo.Properties.Add(new PropertyInfo
+                        var catInfo = new PropertyCategoryInfo
                         {
-                            DisplayName = prop.DisplayName,
-                            InternalName = prop.Name
-                        });
+                            DisplayName = catName,
+                            InternalName = cat.Name
+                        };
+
+                        foreach (DataProperty prop in cat.Properties)
+                        {
+                            catInfo.Properties.Add(new PropertyInfo
+                            {
+                                DisplayName = prop.DisplayName,
+                                InternalName = prop.Name
+                            });
+                        }
+
+                        result.Add(catInfo);
                     }
-
-                    result.Add(catInfo);
                 }
             }
-
-            foreach (ModelItem child in item.Children)
-                CollectPropertyCategories(child, categorySet, result);
-        }
-
-        public static List<string> GetPropertyValuesForDiscipline(
-            string discipline, 
-            string propCategory, 
-            string propName)
-        {
-            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            const int maxItemsPerModel = 100000;
-
-            try
-            {
-                Document doc = NavApp.ActiveDocument;
-                if (doc == null) return values.OrderBy(v => v).ToList();
-
-                List<Model> models = FindModelsForDiscipline(doc, discipline);
-                System.Diagnostics.Debug.WriteLine($"[AutoNAV] Scanning up to {maxItemsPerModel} items across {models.Count} model(s) for discipline '{discipline}'...");
-                foreach (Model model in models)
-                {
-                    int count = 0;
-                    try { CollectPropertyValues(model.RootItem, propCategory, propName, values, ref count, maxItemsPerModel); }
-                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[AutoNAV] Property scan error ({model.FileName}): {ex.Message}"); }
-                }
-            }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[AutoNAV] GetPropertyValuesForDiscipline error: {ex.Message}"); }
-
-            return values.OrderBy(v => v).ToList();
         }
 
         public static void GenerateCustomSearchSets(
@@ -1406,19 +1466,11 @@ namespace AutoNAV
                     return;
                 }
 
-                List<string> values = GetPropertyValuesForDiscipline(discipline, propCategory, propName);
-                if (values.Count == 0)
-                {
-                    Notifier.Warning(string.Format("No values found for property '{0}/{1}' in discipline '{2}'.", propCategory, propName, discipline));
-                    return;
-                }
-
                 FolderItem clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
                 if (clashFolder == null)
                 {
                     selSets.AddCopy(new FolderItem { DisplayName = CLASH_SETS_FOLDER });
-                    root = doc.SelectionSets.RootItem as GroupItem;
-                    clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
+                    clashFolder = FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER);
                 }
 
                 if (clashFolder == null)
@@ -1428,61 +1480,58 @@ namespace AutoNAV
                 }
 
                 string customFolderName = discipline + " - Custom (" + propName + ")";
-                FolderItem customFolder = FindFolder(clashFolder, customFolderName);
-                if (customFolder == null)
-                {
-                    selSets.AddCopy(clashFolder, new FolderItem { DisplayName = customFolderName });
-                    root = doc.SelectionSets.RootItem as GroupItem;
-                    clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
-                    customFolder = clashFolder != null ? FindFolder(clashFolder, customFolderName) : null;
-                }
-
-                if (customFolder == null)
-                {
-                    Notifier.Error("Failed to create custom search set folder.");
-                    return;
-                }
-
                 int created = 0;
                 int skipped = 0;
+                bool cancelled = false;
                 var errors = new List<string>();
 
-                foreach (string value in values)
+                Progress progress = NavApp.BeginProgress("AutoNAV — Function 3", "Preparing…");
+                try
                 {
-                    root = doc.SelectionSets.RootItem as GroupItem;
-                    clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
-                    customFolder = clashFolder != null ? FindFolder(clashFolder, customFolderName) : null;
-                    if (customFolder == null) break;
-
-                    bool exists = false;
-                    foreach (SavedItem child in customFolder.Children)
-                    {
-                        if (child.DisplayName.Equals(value, StringComparison.OrdinalIgnoreCase))
-                        {
-                            exists = true;
-                            break;
-                        }
-                    }
-                    if (exists) { skipped++; continue; }
-
+                    List<Model> models = ModelsForDisciplineSet(doc, discSearchSet, discipline);
+                    progress.BeginSubOperation(0.9, discipline + " — reading values");
+                    List<string> values;
                     try
                     {
-                        var search = new Search();
-                        search.Locations = SearchLocations.DescendantsAndSelf;
-                        search.Selection.SelectionSources.Add(discSource);
-
-                        search.SearchConditions.Add(
-                            SearchCondition.HasPropertyByDisplayName(propCategory, propName)
-                                .EqualValue(VariantData.FromDisplayString(value)));
-
-                        var ss = new SelectionSet(search) { DisplayName = value };
-                        selSets.AddCopy(customFolder, ss);
-                        created++;
+                        values = ScanPropertyValues(doc, models, propCategory, propName, progress, discipline,
+                            new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
                     }
-                    catch (Exception ex)
+                    finally { progress.EndSubOperation(); }
+
+                    if (values == null) cancelled = true;
+                    else if (values.Count > 0)
                     {
-                        errors.Add(string.Format("'{0}': {1}", value, ex.Message));
+                        var sets = new List<SelectionSet>();
+                        foreach (string value in values)
+                        {
+                            try { sets.Add(PropertyValueSet(discSource, propCategory, propName, value, value)); }
+                            catch (Exception ex) { errors.Add(string.Format("'{0}': {1}", value, ex.Message)); }
+                        }
+
+                        progress.BeginSubOperation(1.0, string.Format("{0} — saving {1} search set(s)", discipline, sets.Count));
+                        try
+                        {
+                            var r = CommitSets(doc, () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER),
+                                customFolderName, sets, progress, errors);
+                            created = r.Created;
+                            skipped = r.Skipped;
+                        }
+                        finally { progress.EndSubOperation(); }
                     }
+                    else
+                    {
+                        errors.Add(string.Format("No values found for property '{0}/{1}' in discipline '{2}'.", propCategory, propName, discipline));
+                    }
+                }
+                finally
+                {
+                    NavApp.EndProgress();
+                }
+
+                if (cancelled)
+                {
+                    Notifier.Warning("Function 3 cancelled — no search sets were created.");
+                    return;
                 }
 
                 string msg = string.Format("Function 3 Complete - Custom Search Sets\n\nDiscipline: {0}\nProperty: {1}/{2}\nCreated: {3}  |  Skipped (existing): {4}\n\nFolder: {5}\\{6}",
