@@ -445,6 +445,7 @@ namespace AutoNAV
                 int done = 0;
                 bool cancelled = false;
                 var errors = new List<string>();
+                var report = new List<string>();
                 // Disciplines that share a model (e.g. multi-level sets) reuse its scan.
                 var scanCache = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
                 Func<GroupItem> clashParent = () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER);
@@ -514,6 +515,8 @@ namespace AutoNAV
                                 var r = CommitSets(doc, clashParent, discipline, sets, progress, errors);
                                 totalCreated += r.Created;
                                 totalSkipped += r.Skipped;
+                                report.Add(string.Format("{0}: {1} model(s), {2} value(s) → {3} created, {4} existing",
+                                    discipline, discModels.Count, values.Count, r.Created, r.Skipped));
                             }
                             finally { progress.EndSubOperation(); }
                         }
@@ -533,6 +536,8 @@ namespace AutoNAV
                     cancelled ? "cancelled" : "complete", done, total, totalCreated, CLASH_SETS_FOLDER, totalSkipped);
                 if (cancelled)
                     msg += "\n\nSets created before cancelling were kept. Run Function 2 again to resume — existing sets are skipped.";
+                if (report.Count > 0)
+                    msg += "\n\n" + string.Join("\n", report);
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
 
@@ -1019,7 +1024,13 @@ namespace AutoNAV
         {
             var patterns = GetSearchPatternsFromSet(discSet as SelectionSet);
             if (patterns.Count == 0) patterns.Add(discipline);
-            return FindModelsForDiscipline(doc, patterns);
+            List<Model> models = FindModelsForDiscipline(doc, patterns);
+            // Level codes are normalised ("L3" -> "L03"), so a filename need not
+            // contain the level term verbatim: fall back to the discipline
+            // token alone, which is what Function 2 always matched on before.
+            if (models.Count == 0 && patterns.Count > 1)
+                models = FindModelsForDiscipline(doc, patterns.GetRange(0, 1));
+            return models;
         }
 
         private static SavedItem FindDisciplineSet(Document doc, string discipline)
@@ -1056,34 +1067,42 @@ namespace AutoNAV
             if (parent == null) { errors.Add("Lost reference to the parent folder of '" + folderName + "'"); return (0, 0); }
 
             FolderItem live = FindFolder(parent, folderName);
-            if (live == null)
+            var before = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (live != null) before.UnionWith(live.Children.Select(c => c.DisplayName));
+            else
             {
                 try
                 {
                     var folder = new FolderItem { DisplayName = folderName };
                     foreach (var ss in sets) folder.Children.Add(ss);
                     doc.SelectionSets.AddCopy(parent, folder);
-                    return (sets.Count, 0);
                 }
                 catch (Exception ex)
                 {
-                    // Fall back to adding the sets one at a time below.
                     Debug.WriteLine(string.Format("[AutoNAV] Batch add of '{0}' failed: {1}", folderName, ex.Message));
-                    live = FindFolder(getParent(), folderName);
-                    if (live == null)
-                    {
-                        doc.SelectionSets.AddCopy(getParent(), new FolderItem { DisplayName = folderName });
-                        live = FindFolder(getParent(), folderName);
-                    }
-                    if (live == null) { errors.Add("Failed to create folder '" + folderName + "'"); return (0, 0); }
                 }
+
+                // Never trust the batch add on its own: whatever didn't land in
+                // the document (or the whole folder, if it was rejected) is
+                // added one set at a time below.
+                live = FindFolder(getParent(), folderName);
+                if (live == null)
+                {
+                    doc.SelectionSets.AddCopy(getParent(), new FolderItem { DisplayName = folderName });
+                    live = FindFolder(getParent(), folderName);
+                }
+                if (live == null) { errors.Add("Failed to create folder '" + folderName + "'"); return (0, 0); }
             }
 
             var existing = new HashSet<string>(live.Children.Select(c => c.DisplayName), StringComparer.OrdinalIgnoreCase);
             int created = 0, skipped = 0;
             for (int i = 0; i < sets.Count; i++)
             {
-                if (!existing.Add(sets[i].DisplayName)) { skipped++; continue; }
+                if (!existing.Add(sets[i].DisplayName))
+                {
+                    if (before.Contains(sets[i].DisplayName)) skipped++; else created++;
+                    continue;
+                }
                 if (!progress.Update((double)i / sets.Count)) break;
 
                 // Folder references go stale after each document edit.
@@ -1150,6 +1169,19 @@ namespace AutoNAV
                     {
                         Debug.WriteLine(string.Format("[AutoNAV] Property scan error ({0}): {1}", file, ex.Message));
                     }
+
+                    try
+                    {
+                        // The native search found nothing (or failed): walk the
+                        // model the way the original scan did — every node,
+                        // case-insensitive names — so it never finds less.
+                        if (modelValues.Count == 0 && !progress.IsCanceled)
+                            CollectPropertyValues(model.RootItem, propCat, propName, modelValues, progress);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(string.Format("[AutoNAV] Property walk error ({0}): {1}", file, ex.Message));
+                    }
                     finally
                     {
                         progress.EndSubOperation();
@@ -1160,6 +1192,31 @@ namespace AutoNAV
                 values.UnionWith(modelValues);
             }
             return values.OrderBy(v => v).ToList();
+        }
+
+        private static void CollectPropertyValues(
+            ModelItem root, string propCat, string propName, HashSet<string> values, Progress progress)
+        {
+            if (root == null) return;
+            int n = 0;
+            foreach (ModelItem item in root.DescendantsAndSelf)
+            {
+                if (++n % 2000 == 0 && !progress.Update(0)) return;
+                try
+                {
+                    foreach (PropertyCategory cat in item.PropertyCategories)
+                    {
+                        if (!string.Equals(cat.DisplayName, propCat, StringComparison.OrdinalIgnoreCase)) continue;
+                        foreach (DataProperty prop in cat.Properties)
+                        {
+                            if (!string.Equals(prop.DisplayName, propName, StringComparison.OrdinalIgnoreCase)) continue;
+                            string val = prop.Value?.ToDisplayString();
+                            if (!string.IsNullOrWhiteSpace(val)) values.Add(val);
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         internal static List<DisciplinePatternResult> ComputeDisciplinePatternsDetailed(List<string> fileNamesNoExt)
