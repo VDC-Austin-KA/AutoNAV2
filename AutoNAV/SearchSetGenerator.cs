@@ -215,7 +215,12 @@ namespace AutoNAV
                                 {
                                     var p = picks[i];
                                     p.DisplayName = token;
-                                    p.Pattern = token;
+                                    // Keep searching on text that is in this file's name. A
+                                    // picked discipline code (e.g. "ARCH") usually isn't, so
+                                    // searching on it would select nothing, or fold this file
+                                    // into another file's set and leave it with none.
+                                    if (p.SourceFile.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                                        p.Pattern = token;
                                     p.FromDictionary = true;
                                     p.CanonicalName = TryMatchDiscipline(token, out _, out string canon) ? canon : token;
                                     picks[i] = p;
@@ -236,26 +241,20 @@ namespace AutoNAV
                 // reducing to "ARCH") instead produce one set per level,
                 // named "L01-ARCH".
                 var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var patternEntries = new List<(string Pattern, string Level, string DisplayName)>();
+                var patternEntries = new List<(string Pattern, string Level, string DisplayName, string Canonical)>();
                 foreach (var p in picks)
                 {
                     string dedupeKey = multiLevel ? (p.Pattern + "|" + (p.Level ?? "")) : p.Pattern;
                     if (seenPatterns.Add(dedupeKey))
                     {
+                        string token = StripSeparatorWrapping(p.DisplayName);
                         string displayName = (multiLevel && !string.IsNullOrEmpty(p.Level))
-                            ? p.Level + "-" + StripSeparatorWrapping(p.Pattern)
-                            : StripSeparatorWrapping(p.Pattern);
-                        patternEntries.Add((p.Pattern, multiLevel ? p.Level : null, displayName));
-                        // Registry must be keyed on the *actual set name* —
-                        // Function 2's LoadDisciplineList and the clash-test
-                        // priority sort look it up by that name.  In multiLevel
-                        // mode the set is "L01-ARCH", not the bare token
-                        // p.DisplayName ("ARCH"); keying on the bare token made
-                        // multiLevel rows resolve to canonical = null.
-                        DisciplineRegistry[displayName] =
-                            p.FromDictionary
-                                ? p.CanonicalName
-                                : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);
+                            ? p.Level + "-" + token
+                            : token;
+                        string canonical = p.FromDictionary
+                            ? p.CanonicalName
+                            : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);
+                        patternEntries.Add((p.Pattern, multiLevel ? p.Level : null, displayName, canonical));
                     }
                 }
 
@@ -282,19 +281,39 @@ namespace AutoNAV
                     return;
                 }
 
-                // Existing set names — skip ones already present
-                var existing = new HashSet<string>(
-                    discFolder.Children.OfType<SavedItem>().Select(c => c.DisplayName.Trim()),
-                    StringComparer.OrdinalIgnoreCase);
+                // Existing set name → its search terms, so a name clash can be
+                // told apart from the very same set being created again.
+                var existing = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                foreach (SavedItem c in discFolder.Children)
+                    existing[c.DisplayName.Trim()] = GetSearchPatternsFromSet(c as SelectionSet);
 
                 int created = 0;
                 int skipped = 0;
                 var errors = new List<string>();
+                var createdNames = new List<string>();
 
                 foreach (var entry in patternEntries)
                 {
+                    var terms = new List<string> { entry.Pattern };
+                    if (!string.IsNullOrEmpty(entry.Level)) terms.Add(entry.Level);
+
+                    // A name already taken by a set that searches for something
+                    // else gets "2" (then "3", …) appended, so every discipline is
+                    // still created and offered. The same name with the same
+                    // search is the set from an earlier run: keep it, add nothing.
                     string displayName = entry.DisplayName;
-                    if (existing.Contains(displayName)) { skipped++; continue; }
+                    bool alreadyPresent = false;
+                    for (int n = 2; existing.TryGetValue(displayName, out List<string> existingTerms); n++)
+                    {
+                        if (SameTerms(existingTerms, terms)) { alreadyPresent = true; break; }
+                        displayName = entry.DisplayName + n;
+                    }
+
+                    // Registry must be keyed on the *actual set name* —
+                    // Function 2's LoadDisciplineList and the clash-test
+                    // priority sort look it up by that name.
+                    DisciplineRegistry[displayName] = entry.Canonical;
+                    if (alreadyPresent) { skipped++; continue; }
 
                     // Refresh folder reference each iteration
                     root       = doc.SelectionSets.RootItem as GroupItem;
@@ -306,20 +325,18 @@ namespace AutoNAV
                         var search = new Search();
                         search.Locations = SearchLocations.DescendantsAndSelf;
                         search.Selection.SelectAll();
-                        search.SearchConditions.Add(
-                            SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
-                                .DisplayStringContains(entry.Pattern));
-                        if (multiLevel && !string.IsNullOrEmpty(entry.Level))
+                        foreach (string term in terms)
                         {
                             search.SearchConditions.Add(
                                 SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
-                                    .DisplayStringContains(entry.Level));
+                                    .DisplayStringContains(term));
                         }
 
                         var ss = new SelectionSet(search) { DisplayName = displayName };
 
                         selSets.AddCopy(discFolder, ss);
-                        existing.Add(displayName);
+                        existing[displayName] = terms;
+                        createdNames.Add(displayName);
                         created++;
                     }
                     catch (Exception ex)
@@ -334,8 +351,10 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nErrors:\n" + string.Join("\n", errors);
 
+                if (createdNames.Count > 0)
+                    msg += "\n\nCreated: " + string.Join(", ", createdNames);
                 if (patternEntries.Count > 0)
-                    msg += "\n\nPatterns: " + string.Join(", ", patternEntries.Select(p => p.DisplayName));
+                    msg += "\n\nPatterns: " + string.Join(", ", patternEntries.Select(p => p.Pattern + (p.Level != null ? "+" + p.Level : "")));
 
                 if (allFileNames.Count > 0 && allFileNames.Count <= 20)
                     msg += "\n\nFiles: " + string.Join(", ", allFileNames);
@@ -973,6 +992,12 @@ namespace AutoNAV
             if ((first == '-' || first == '_') && first == last)
                 return pattern.Substring(1, pattern.Length - 2);
             return pattern;
+        }
+
+        private static bool SameTerms(List<string> a, List<string> b)
+        {
+            if (a == null || b == null || a.Count != b.Count) return false;
+            return new HashSet<string>(a, StringComparer.OrdinalIgnoreCase).SetEquals(b);
         }
 
         // Every search term of a Function-1 set: the discipline token and, for
