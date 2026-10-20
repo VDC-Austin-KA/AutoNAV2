@@ -15,6 +15,12 @@ namespace AutoNAV
         private const string DISCIPLINES_FOLDER = "1. DISCIPLINES";
         private const string CLASH_SETS_FOLDER  = "2. CLASH SETS";
 
+        // Shown in every summary so it is clear which build Navisworks loaded.
+        private static readonly string BuildStamp = "AutoNAV build " +
+            (typeof(SearchSetGenerator).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyFileVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyFileVersionAttribute>().FirstOrDefault()?.Version ?? "?");
+
         public class DisciplinePatternResult
         {
             public string DisplayName { get; set; }
@@ -345,7 +351,7 @@ namespace AutoNAV
                     }
                 }
 
-                string msg = string.Format("Function 1 complete.\nModels detected: {0}\nPatterns derived: {1}\nCreated: {2}  |  Skipped (existing): {3}",
+                string msg = BuildStamp + "\n" + string.Format("Function 1 complete.\nModels detected: {0}\nPatterns derived: {1}\nCreated: {2}  |  Skipped (existing): {3}",
                     allFileNames.Count, patternEntries.Count, created, skipped);
 
                 if (errors.Count > 0)
@@ -521,12 +527,11 @@ namespace AutoNAV
                         List<string> setNames = values.Select(v => multiLevel ? (discipline + "-" + v) : v).ToList();
 
                         (int Created, int Skipped, bool Cancelled) r;
-                        using (var progress = new StepProgress(step, string.Format("Saving {0} search set(s)…", setNames.Count)))
-                        {
-                            r = CommitSets(doc, clashParent, discipline, setNames,
-                                i => PropertyValueSet(discSource, propCat, propName, values[i], setNames[i]),
-                                progress, errors);
-                        }
+                        // Saved with no progress dialog open, exactly as Function 2
+                        // always did; the dialog only covers the read-only scan.
+                        r = CommitSets(doc, clashParent, discipline, setNames,
+                            i => PropertyValueSet(discSource, propCat, propName, values[i], setNames[i]),
+                            null, errors);
                         totalCreated += r.Created;
                         totalSkipped += r.Skipped;
                         report.Add(string.Format("{0}: {1} model(s), {2} value(s) → {3} created, {4} existing",
@@ -544,7 +549,7 @@ namespace AutoNAV
                     }
                 }
 
-                string msg = string.Format("Function 2 {0}.\nDisciplines processed: {1} of {2}\nCreated {3} new search set(s) in '{4}'  |  Skipped (existing): {5}",
+                string msg = BuildStamp + "\n" + string.Format("Function 2 {0}.\nDisciplines processed: {1} of {2}\nCreated {3} new search set(s) in '{4}'  |  Skipped (existing): {5}",
                     cancelled ? "cancelled" : "complete", done, total, totalCreated, CLASH_SETS_FOLDER, totalSkipped);
                 if (cancelled)
                     msg += "\n\nSets created before cancelling were kept. Run Function 2 again to resume — existing sets are skipped.";
@@ -553,7 +558,9 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
 
-                Notifier.Warning(msg);
+                // A run that produced nothing is an error, so its reason stands out.
+                if (totalCreated == 0 && totalSkipped == 0) Notifier.Error(msg);
+                else Notifier.Warning(msg);
             }
             catch (Exception ex)
             {
@@ -1132,7 +1139,7 @@ namespace AutoNAV
             for (int i = 0; i < setNames.Count; i++)
             {
                 if (!existing.Add(setNames[i])) { skipped++; continue; }
-                if (!progress.Update((double)i / setNames.Count)) return (created, skipped, true);
+                if (progress != null && !progress.Update((double)i / setNames.Count)) return (created, skipped, true);
 
                 // Folder references go stale after each document edit.
                 live = FindFolder(getParent(), folderName);
@@ -1580,17 +1587,12 @@ namespace AutoNAV
                 if (values == null) cancelled = true;
                 else if (values.Count > 0)
                 {
-                    using (var progress = new StepProgress(step, string.Format("Saving {0} search set(s)…", values.Count)))
-                    {
-                        var r = CommitSets(doc, () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER),
-                            customFolderName, values,
-                            i => PropertyValueSet(discSource, propCategory, propName, values[i], values[i]),
-                            progress, errors);
-                        created = r.Created;
-                        skipped = r.Skipped;
-                        if (r.Cancelled)
-                            errors.Add("Cancelled — the sets created before cancelling were kept.");
-                    }
+                    var r = CommitSets(doc, () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER),
+                        customFolderName, values,
+                        i => PropertyValueSet(discSource, propCategory, propName, values[i], values[i]),
+                        null, errors);
+                    created = r.Created;
+                    skipped = r.Skipped;
                 }
                 else
                 {
@@ -1603,7 +1605,7 @@ namespace AutoNAV
                     return;
                 }
 
-                string msg = string.Format("Function 3 Complete - Custom Search Sets\n\nDiscipline: {0}\nProperty: {1}/{2}\nCreated: {3}  |  Skipped (existing): {4}\n\nFolder: {5}\\{6}",
+                string msg = BuildStamp + "\n" + string.Format("Function 3 Complete - Custom Search Sets\n\nDiscipline: {0}\nProperty: {1}/{2}\nCreated: {3}  |  Skipped (existing): {4}\n\nFolder: {5}\\{6}",
                     discipline, propCategory, propName, created, skipped, CLASH_SETS_FOLDER, customFolderName);
 
                 if (errors.Count > 0)
