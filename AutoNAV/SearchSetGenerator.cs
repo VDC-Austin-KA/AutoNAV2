@@ -1085,11 +1085,18 @@ namespace AutoNAV
                 try { _p = NavApp.BeginProgress(title, message); } catch { _p = null; }
             }
 
-            // false once the user has pressed Cancel.
+            // Moves the bar; false once the user has pressed Cancel. Cancel is
+            // read from IsCanceled only — Update's own return value is ignored,
+            // as ClashGrouper does: treating a false from it as "cancelled"
+            // aborted every run before a single set was created.
             public bool Update(double fraction)
             {
                 if (_p == null) return true;
-                try { return _p.Update(Math.Max(0.0, Math.Min(1.0, fraction))) && !_p.IsCanceled; }
+                try
+                {
+                    _p.Update(Math.Max(0.0, Math.Min(1.0, fraction)));
+                    return !_p.IsCanceled;
+                }
                 catch { return true; }
             }
 
