@@ -15,6 +15,19 @@ namespace AutoNAV
         private const string DISCIPLINES_FOLDER = "1. DISCIPLINES";
         private const string CLASH_SETS_FOLDER  = "2. CLASH SETS";
 
+        // The summary is also written to %TEMP%\AutoNAV-<name>.txt so it can be
+        // sent on in full. Returns the path, or null if it couldn't be written.
+        private static string WriteLog(string name, string text)
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "AutoNAV-" + name + ".txt");
+                System.IO.File.WriteAllText(path, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\n" + text);
+                return path;
+            }
+            catch { return null; }
+        }
+
         // Shown in every summary so it is clear which build Navisworks loaded.
         private static readonly string BuildStamp = "AutoNAV build " +
             (typeof(SearchSetGenerator).Assembly
@@ -472,7 +485,7 @@ namespace AutoNAV
                 var errors = new List<string>();
                 var report = new List<string>();
                 // Disciplines that share a model (e.g. multi-level sets) reuse its scan.
-                var scanCache = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+                var scanCache = new Dictionary<string, ModelScan>(StringComparer.OrdinalIgnoreCase);
                 Func<GroupItem> clashParent = () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER);
 
                 // Disciplines are processed one at a time and every set is
@@ -504,22 +517,30 @@ namespace AutoNAV
                         List<Model> discModels = ModelsForDisciplineSet(doc, discSearchSet, discipline);
                         if (discModels.Count == 0)
                         {
-                            errors.Add(string.Format("'{0}': no matching model files found", discipline));
+                            errors.Add(string.Format("'{0}': no matching model files found (search terms: {1}; loaded: {2})",
+                                discipline,
+                                string.Join(" + ", GetSearchPatternsFromSet(discSearchSet as SelectionSet)),
+                                string.Join(", ", Enumerable.Range(0, doc.Models.Count).Take(15).Select(m => ModelFileName(doc.Models[m])))));
                             continue;
                         }
 
-                        List<string> values;
+                        ScanResult scan;
                         using (var progress = new StepProgress(step, string.Format(
                             "Reading '{0}/{1}' values from {2} model(s)…", propCat, propName, discModels.Count)))
                         {
-                            values = ScanPropertyValues(doc, discModels, propCat, propName, progress, scanCache);
+                            scan = ScanPropertyValues(doc, discModels, propCat, propName, progress, scanCache);
                         }
-                        if (values == null) { cancelled = true; break; }
+                        if (scan == null) { cancelled = true; break; }
+                        List<string> values = scan.Values;
                         if (values.Count == 0)
                         {
-                            errors.Add(string.Format("'{0}': no '{1}/{2}' values found", discipline, propCat, propName));
+                            errors.Add(string.Format("'{0}': no '{1}/{2}' values found in {3} model(s):\n{4}",
+                                discipline, propCat, propName, discModels.Count, scan.Diagnostics));
                             continue;
                         }
+                        if (scan.Category != propCat || scan.Property != propName)
+                            report.Add(string.Format("{0}: '{1}/{2}' found as '{3}/{4}'{5}", discipline, propCat, propName,
+                                scan.Category, scan.Property, scan.ByInternalName ? " (internal names)" : ""));
 
                         // multiLevel: discipline is already the Function-1 name
                         // "L01-ARCH", so prefixing it yields "L01-ARCH-Walls"
@@ -530,7 +551,7 @@ namespace AutoNAV
                         // Saved with no progress dialog open, exactly as Function 2
                         // always did; the dialog only covers the read-only scan.
                         r = CommitSets(doc, clashParent, discipline, setNames,
-                            i => PropertyValueSet(discSource, propCat, propName, values[i], setNames[i]),
+                            i => PropertyValueSet(discSource, scan, values[i], setNames[i]),
                             null, errors);
                         totalCreated += r.Created;
                         totalSkipped += r.Skipped;
@@ -557,6 +578,9 @@ namespace AutoNAV
                     msg += "\n\n" + string.Join("\n", report);
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
+
+                string logPath = WriteLog("Function2", msg);
+                if (logPath != null) msg += "\n\nSaved to: " + logPath;
 
                 // A run that produced nothing is an error, so its reason stands out.
                 if (totalCreated == 0 && totalSkipped == 0) Notifier.Error(msg);
@@ -1068,13 +1092,16 @@ namespace AutoNAV
         // Scope search to the discipline's search set (Sets mode)
         // This produces locator: lcop_selection_set_tree/1. DISCIPLINES/<discipline>
         private static SelectionSet PropertyValueSet(
-            SelectionSource discSource, string propCat, string propName, string value, string setName)
+            SelectionSource discSource, ScanResult scan, string value, string setName)
         {
+            string propCat = scan.Category, propName = scan.Property;
             var search = new Search();
             search.Locations = SearchLocations.DescendantsAndSelf;
             search.Selection.SelectionSources.Add(discSource);
             search.SearchConditions.Add(
-                SearchCondition.HasPropertyByDisplayName(propCat, propName)
+                (scan.ByInternalName
+                    ? SearchCondition.HasPropertyByName(propCat, propName)
+                    : SearchCondition.HasPropertyByDisplayName(propCat, propName))
                     .EqualValue(VariantData.FromDisplayString(value)));
             return new SelectionSet(search) { DisplayName = setName };
         }
@@ -1157,16 +1184,41 @@ namespace AutoNAV
             return (created, skipped, false);
         }
 
-        // Unique propCat/propName values across `models`. A native Search
-        // returns only the items that carry the property; if it finds nothing
-        // (or fails) the model is walked the way the original scan did, so the
-        // result is never smaller than before. `cache` lets disciplines that
-        // share a model reuse its scan. Returns null when the user cancels.
-        private static List<string> ScanPropertyValues(
-            Document doc, List<Model> models, string propCat, string propName,
-            StepProgress progress, Dictionary<string, HashSet<string>> cache)
+        // What one model's scan found: the values, the property's actual
+        // names as Navisworks reports them, and enough of what the model
+        // does contain to say why nothing matched.
+        private sealed class ModelScan
         {
-            var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly HashSet<string> Values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public string Category, Property;   // names to build sets with
+            public bool ByInternalName;          // matched on internal, not display, names
+            public int Items;
+            public readonly HashSet<string> CategoriesSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            public readonly HashSet<string> PropertiesSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private sealed class ScanResult
+        {
+            public List<string> Values;
+            public string Category, Property;
+            public bool ByInternalName;
+            public string Diagnostics;           // set when nothing was found
+        }
+
+        // Unique propCat/propName values across `models`. A native Search
+        // returns only the items that carry the property under that exact
+        // display name; if it finds nothing (or fails) every node is walked
+        // and the category / property are matched case-insensitively on
+        // display OR internal name, so a renamed or re-cased property
+        // (e.g. a different Navisworks / exporter version) is still found and
+        // the sets are built with the names actually present. `cache` lets
+        // disciplines that share a model reuse its scan. Returns null when
+        // the user cancels.
+        private static ScanResult ScanPropertyValues(
+            Document doc, List<Model> models, string propCat, string propName,
+            StepProgress progress, Dictionary<string, ModelScan> cache)
+        {
+            var scans = new List<KeyValuePair<string, ModelScan>>();
             for (int i = 0; i < models.Count; i++)
             {
                 Model  model = models[i];
@@ -1175,9 +1227,9 @@ namespace AutoNAV
                 double share = 1.0 / models.Count;
                 if (!progress.Update(i * share)) return null;
 
-                if (!cache.TryGetValue(key, out HashSet<string> modelValues))
+                if (!cache.TryGetValue(key, out ModelScan scan))
                 {
-                    modelValues = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    scan = new ModelScan();
                     try
                     {
                         var search = new Search();
@@ -1195,10 +1247,11 @@ namespace AutoNAV
                             {
                                 string val = item.PropertyCategories
                                     .FindPropertyByDisplayName(propCat, propName)?.Value?.ToDisplayString();
-                                if (!string.IsNullOrWhiteSpace(val)) modelValues.Add(val);
+                                if (!string.IsNullOrWhiteSpace(val)) scan.Values.Add(val);
                             }
                             catch { }
                         }
+                        if (scan.Values.Count > 0) { scan.Category = propCat; scan.Property = propName; }
                     }
                     catch (Exception ex)
                     {
@@ -1207,42 +1260,89 @@ namespace AutoNAV
 
                     try
                     {
-                        if (modelValues.Count == 0 &&
-                            !CollectPropertyValues(model.RootItem, propCat, propName, modelValues, progress, i * share))
+                        if (scan.Values.Count == 0 &&
+                            !WalkPropertyValues(model.RootItem, propCat, propName, scan, progress, i * share))
                             return null;
                     }
                     catch (Exception ex)
                     {
                         Debug.WriteLine(string.Format("[AutoNAV] Property walk error ({0}): {1}", file, ex.Message));
                     }
-                    cache[key] = modelValues;
+                    cache[key] = scan;
                 }
-                values.UnionWith(modelValues);
+                scans.Add(new KeyValuePair<string, ModelScan>(file, scan));
             }
-            return values.OrderBy(v => v).ToList();
+
+            var result = new ScanResult
+            {
+                Values = scans.SelectMany(s => s.Value.Values)
+                    .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(v => v).ToList(),
+                Category = propCat,
+                Property = propName,
+            };
+            var found = scans.Select(s => s.Value).FirstOrDefault(s => s.Values.Count > 0);
+            if (found != null)
+            {
+                result.Category = found.Category;
+                result.Property = found.Property;
+                result.ByInternalName = found.ByInternalName;
+            }
+            else
+            {
+                result.Diagnostics = string.Join("\n", scans.Select(s => string.Format(
+                    "    {0}: {1} item(s) read; categories: {2}{3}",
+                    s.Key, s.Value.Items,
+                    s.Value.CategoriesSeen.Count == 0 ? "(none)" : string.Join(", ", s.Value.CategoriesSeen.Take(25)),
+                    s.Value.PropertiesSeen.Count == 0 ? "" :
+                        string.Format("; '{0}' has: {1}", propCat, string.Join(", ", s.Value.PropertiesSeen.Take(25))))));
+            }
+            return result;
         }
 
-        // The original every-node, case-insensitive property walk. Returns
-        // false when the user cancels.
-        private static bool CollectPropertyValues(
-            ModelItem root, string propCat, string propName, HashSet<string> values,
+        private static bool NameMatches(string displayName, string internalName, string wanted)
+        {
+            wanted = wanted?.Trim();
+            return string.Equals(displayName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(internalName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Every-node walk (the original scan), matching category and property
+        // case-insensitively on display or internal name, and noting what the
+        // model contains for the diagnostics. Returns false when the user cancels.
+        private static bool WalkPropertyValues(
+            ModelItem root, string propCat, string propName, ModelScan scan,
             StepProgress progress, double fraction)
         {
             if (root == null) return true;
-            int n = 0;
             foreach (ModelItem item in root.DescendantsAndSelf)
             {
-                if (++n % 2000 == 0 && !progress.Update(fraction)) return false;
+                if (++scan.Items % 2000 == 0 && !progress.Update(fraction)) return false;
                 try
                 {
                     foreach (PropertyCategory cat in item.PropertyCategories)
                     {
-                        if (!string.Equals(cat.DisplayName, propCat, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (scan.CategoriesSeen.Count < 40 && !string.IsNullOrEmpty(cat.DisplayName))
+                            scan.CategoriesSeen.Add(cat.DisplayName);
+                        if (!NameMatches(cat.DisplayName, cat.Name, propCat)) continue;
                         foreach (DataProperty prop in cat.Properties)
                         {
-                            if (!string.Equals(prop.DisplayName, propName, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (scan.PropertiesSeen.Count < 40 && !string.IsNullOrEmpty(prop.DisplayName))
+                                scan.PropertiesSeen.Add(prop.DisplayName);
+                            if (!NameMatches(prop.DisplayName, prop.Name, propName)) continue;
                             string val = prop.Value?.ToDisplayString();
-                            if (!string.IsNullOrWhiteSpace(val)) values.Add(val);
+                            if (string.IsNullOrWhiteSpace(val)) continue;
+                            scan.Values.Add(val);
+                            if (scan.Category == null)
+                            {
+                                // Build sets with the names Navisworks reports. If the
+                                // display names don't match what was asked for, use the
+                                // internal names, which don't vary by version / locale.
+                                bool display = NameMatches(cat.DisplayName, null, propCat)
+                                            && NameMatches(prop.DisplayName, null, propName);
+                                scan.ByInternalName = !display;
+                                scan.Category = display ? cat.DisplayName : cat.Name;
+                                scan.Property = display ? prop.DisplayName : prop.Name;
+                            }
                         }
                     }
                 }
@@ -1576,27 +1676,29 @@ namespace AutoNAV
 
                 string step = "AutoNAV — Function 3  ·  " + discipline;
                 List<Model> models = ModelsForDisciplineSet(doc, discSearchSet, discipline);
-                List<string> values;
+                ScanResult scan;
                 using (var progress = new StepProgress(step, string.Format(
                     "Reading '{0}/{1}' values from {2} model(s)…", propCategory, propName, models.Count)))
                 {
-                    values = ScanPropertyValues(doc, models, propCategory, propName, progress,
-                        new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase));
+                    scan = ScanPropertyValues(doc, models, propCategory, propName, progress,
+                        new Dictionary<string, ModelScan>(StringComparer.OrdinalIgnoreCase));
                 }
 
-                if (values == null) cancelled = true;
-                else if (values.Count > 0)
+                if (scan == null) cancelled = true;
+                else if (scan.Values.Count > 0)
                 {
+                    List<string> values = scan.Values;
                     var r = CommitSets(doc, () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER),
                         customFolderName, values,
-                        i => PropertyValueSet(discSource, propCategory, propName, values[i], values[i]),
+                        i => PropertyValueSet(discSource, scan, values[i], values[i]),
                         null, errors);
                     created = r.Created;
                     skipped = r.Skipped;
                 }
                 else
                 {
-                    errors.Add(string.Format("No values found for property '{0}/{1}' in discipline '{2}'.", propCategory, propName, discipline));
+                    errors.Add(string.Format("No values found for property '{0}/{1}' in discipline '{2}' ({3} model(s)):\n{4}",
+                        propCategory, propName, discipline, models.Count, scan.Diagnostics));
                 }
 
                 if (cancelled)
