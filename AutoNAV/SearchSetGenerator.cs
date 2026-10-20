@@ -550,6 +550,7 @@ namespace AutoNAV
                         (int Created, int Skipped, bool Cancelled) r;
                         // Saved with no progress dialog open, exactly as Function 2
                         // always did; the dialog only covers the read-only scan.
+                        using (new StepProgress(step, string.Format("saving {0} search set(s)…", setNames.Count))) { }
                         r = CommitSets(doc, clashParent, discipline, setNames,
                             i => PropertyValueSet(discSource, scan, values[i], setNames[i]),
                             null, errors);
@@ -579,6 +580,7 @@ namespace AutoNAV
                 if (errors.Count > 0)
                     msg += "\n\nIssues:\n" + string.Join("\n", errors);
 
+                try { StatusSink?.Invoke(string.Format("Function 2 {0}: {1} search set(s) created", cancelled ? "cancelled" : "finished", totalCreated)); } catch { }
                 string logPath = WriteLog("Function2", msg);
                 if (logPath != null) msg += "\n\nSaved to: " + logPath;
 
@@ -1106,40 +1108,50 @@ namespace AutoNAV
             return new SelectionSet(search) { DisplayName = setName };
         }
 
-        // The Navisworks progress dialog (title, message, bar, Cancel), limited
-        // to the calls ClashGrouper already relies on: BeginProgress, Update,
-        // IsCanceled, EndProgress. Every call is guarded — progress is advisory
-        // and must never be the reason a search set doesn't get created.
+        // Set by MainWindow: shows a line of status text in the AutoNAV window
+        // and lets the window repaint while a long scan runs.
+        public static Action<string> StatusSink;
+
+        // Progress for a long step, shown as status text in the AutoNAV window
+        // ("<title> — <message> 42%"). It deliberately does NOT use the
+        // Navisworks progress dialog: the property scan worked before that
+        // dialog was added and has found nothing on Navisworks 2027 since, so
+        // the scan now runs exactly as it originally did, with no Navisworks
+        // progress operation open. Status failures are swallowed.
         private sealed class StepProgress : IDisposable
         {
-            private Progress _p;
+            private readonly string _base;
+            private string _text;
+            private readonly Stopwatch _sinceShown = Stopwatch.StartNew();
 
             public StepProgress(string title, string message)
             {
-                try { _p = NavApp.BeginProgress(title, message); } catch { _p = null; }
+                _base = _text = title + " — " + message;
+                Show(_text);
             }
 
-            // Moves the bar; false once the user has pressed Cancel. Cancel is
-            // read from IsCanceled only — Update's own return value is ignored,
-            // as ClashGrouper does: treating a false from it as "cancelled"
-            // aborted every run before a single set was created.
+            // Names the sub-step, e.g. the model being read.
+            public void Step(string detail)
+            {
+                _text = _base + " — " + detail;
+                Show(_text);
+            }
+
+            // Always true: there is no Cancel without the Navisworks dialog.
             public bool Update(double fraction)
             {
-                if (_p == null) return true;
-                try
-                {
-                    _p.Update(Math.Max(0.0, Math.Min(1.0, fraction)));
-                    return !_p.IsCanceled;
-                }
-                catch { return true; }
+                if (_sinceShown.ElapsedMilliseconds >= 250)
+                    Show(string.Format("{0}  {1:0}%", _text, 100 * Math.Max(0.0, Math.Min(1.0, fraction))));
+                return true;
             }
 
-            public void Dispose()
+            private void Show(string text)
             {
-                if (_p == null) return;
-                _p = null;
-                try { NavApp.EndProgress(); } catch { }
+                _sinceShown.Restart();
+                try { StatusSink?.Invoke(text); } catch { }
             }
+
+            public void Dispose() { }
         }
 
         // Writes the sets named `setNames` into the `folderName` subfolder of
@@ -1225,7 +1237,7 @@ namespace AutoNAV
                 string file  = ModelFileName(model);
                 string key   = file + "|" + propCat + "|" + propName;
                 double share = 1.0 / models.Count;
-                if (!progress.Update(i * share)) return null;
+                progress.Step(string.Format("model {0} of {1}: {2}", i + 1, models.Count, file));
 
                 if (!cache.TryGetValue(key, out ModelScan scan))
                 {
@@ -1306,30 +1318,34 @@ namespace AutoNAV
                 || string.Equals(internalName?.Trim(), wanted, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Every-node walk (the original scan), matching category and property
-        // case-insensitively on display or internal name, and noting what the
-        // model contains for the diagnostics. Returns false when the user cancels.
+        // Every-node walk, structured exactly like the original scan: recurse
+        // through item.Children, each node and each subtree in its own try, so
+        // a node that can't be read only skips itself. Matches category and
+        // property case-insensitively on display or internal name, and notes
+        // what the model contains for the diagnostics. Returns false when the
+        // user cancels.
         private static bool WalkPropertyValues(
-            ModelItem root, string propCat, string propName, ModelScan scan,
+            ModelItem item, string propCat, string propName, ModelScan scan,
             StepProgress progress, double fraction)
         {
-            if (root == null) return true;
-            foreach (ModelItem item in root.DescendantsAndSelf)
+            if (item == null) return true;
+            if (++scan.Items % 2000 == 0 && !progress.Update(fraction)) return false;
+
+            try
             {
-                if (++scan.Items % 2000 == 0 && !progress.Update(fraction)) return false;
-                try
+                foreach (PropertyCategory cat in item.PropertyCategories)
                 {
-                    foreach (PropertyCategory cat in item.PropertyCategories)
+                    if (scan.CategoriesSeen.Count < 40 && !string.IsNullOrEmpty(cat.DisplayName))
+                        scan.CategoriesSeen.Add(cat.DisplayName);
+                    if (!NameMatches(cat.DisplayName, cat.Name, propCat)) continue;
+                    foreach (DataProperty prop in cat.Properties)
                     {
-                        if (scan.CategoriesSeen.Count < 40 && !string.IsNullOrEmpty(cat.DisplayName))
-                            scan.CategoriesSeen.Add(cat.DisplayName);
-                        if (!NameMatches(cat.DisplayName, cat.Name, propCat)) continue;
-                        foreach (DataProperty prop in cat.Properties)
+                        if (scan.PropertiesSeen.Count < 40 && !string.IsNullOrEmpty(prop.DisplayName))
+                            scan.PropertiesSeen.Add(prop.DisplayName);
+                        if (!NameMatches(prop.DisplayName, prop.Name, propName)) continue;
+                        try
                         {
-                            if (scan.PropertiesSeen.Count < 40 && !string.IsNullOrEmpty(prop.DisplayName))
-                                scan.PropertiesSeen.Add(prop.DisplayName);
-                            if (!NameMatches(prop.DisplayName, prop.Name, propName)) continue;
-                            string val = prop.Value?.ToDisplayString();
+                            string val = prop.Value.ToDisplayString();
                             if (string.IsNullOrWhiteSpace(val)) continue;
                             scan.Values.Add(val);
                             if (scan.Category == null)
@@ -1344,10 +1360,18 @@ namespace AutoNAV
                                 scan.Property = display ? prop.DisplayName : prop.Name;
                             }
                         }
+                        catch { }
                     }
                 }
-                catch { }
             }
+            catch { }
+
+            try
+            {
+                foreach (ModelItem child in item.Children)
+                    if (!WalkPropertyValues(child, propCat, propName, scan, progress, fraction)) return false;
+            }
+            catch { }
             return true;
         }
 
@@ -1557,23 +1581,32 @@ namespace AutoNAV
             return result.OrderBy(c => c.DisplayName).ToList();
         }
 
-        // Returns false when the user cancels.
+        // Recurses through item.Children like the original scan, each node in
+        // its own try. Returns false when the user cancels.
         private static bool CollectPropertyCategories(
-            ModelItem root,
+            ModelItem item,
             HashSet<string> categorySet,
             List<PropertyCategoryInfo> result,
             StepProgress progress,
             double fraction)
         {
-            if (root == null) return true;
-
             int n = 0;
-            foreach (ModelItem item in root.DescendantsAndSelf)
-            {
-                // No cheap total to report against; Update keeps the dialog
-                // responsive and is where Cancel is picked up.
-                if (++n % 2000 == 0 && !progress.Update(fraction)) return false;
+            return CollectPropertyCategories(item, categorySet, result, progress, fraction, ref n);
+        }
 
+        private static bool CollectPropertyCategories(
+            ModelItem item,
+            HashSet<string> categorySet,
+            List<PropertyCategoryInfo> result,
+            StepProgress progress,
+            double fraction,
+            ref int n)
+        {
+            if (item == null) return true;
+            if (++n % 2000 == 0 && !progress.Update(fraction)) return false;
+
+            try
+            {
                 foreach (PropertyCategory cat in item.PropertyCategories)
                 {
                     string catName = cat.DisplayName;
@@ -1600,6 +1633,14 @@ namespace AutoNAV
                     }
                 }
             }
+            catch { }
+
+            try
+            {
+                foreach (ModelItem child in item.Children)
+                    if (!CollectPropertyCategories(child, categorySet, result, progress, fraction, ref n)) return false;
+            }
+            catch { }
             return true;
         }
 
@@ -1688,6 +1729,7 @@ namespace AutoNAV
                 else if (scan.Values.Count > 0)
                 {
                     List<string> values = scan.Values;
+                    using (new StepProgress(step, string.Format("saving {0} search set(s)…", values.Count))) { }
                     var r = CommitSets(doc, () => FindFolder(doc.SelectionSets.RootItem as GroupItem, CLASH_SETS_FOLDER),
                         customFolderName, values,
                         i => PropertyValueSet(discSource, scan, values[i], values[i]),

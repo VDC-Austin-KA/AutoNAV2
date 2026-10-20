@@ -44,6 +44,14 @@ namespace AutoNAV
                 });
             };
 
+            // Long search-set scans report their current step here; DoEvents
+            // lets the window repaint so it doesn't look hung.
+            SearchSetGenerator.StatusSink = msg =>
+            {
+                SetStatus(msg);
+                System.Windows.Forms.Application.DoEvents();
+            };
+
             Loaded += MainWindow_Loaded;
         }
 
@@ -295,6 +303,8 @@ namespace AutoNAV
 
         private void OnFunction2Click(object sender, RoutedEventArgs e)
         {
+            // The scan repaints the window as it goes, so block a second click.
+            btnFunction2.IsEnabled = false;
             try
             {
                 List<string[]> selectedProps = GetSelectedDisciplineProps();
@@ -325,6 +335,10 @@ namespace AutoNAV
             {
                 NotifyError("Error in Function 2:\n\n" + ex.Message);
             }
+            finally
+            {
+                btnFunction2.IsEnabled = true;
+            }
         }
 
         private void OnFunction3Click(object sender, RoutedEventArgs e)
@@ -349,6 +363,7 @@ namespace AutoNAV
                 string propName = propParts.Length > 1 ? propParts[1] : propParts[0];
 
                 SetStatus("Running Function 3 - creating custom search sets...");
+                btnFunction3.IsEnabled = false;
                 SearchSetGenerator.GenerateCustomSearchSets(discipline, category, propName);
                 SetStatus("Function 3 complete.");
             }
@@ -356,6 +371,10 @@ namespace AutoNAV
             {
                 SetStatus("Function 3 failed.");
                 NotifyError("Error in Function 3:\n\n" + ex.Message);
+            }
+            finally
+            {
+                btnFunction3.IsEnabled = true;
             }
         }
 
