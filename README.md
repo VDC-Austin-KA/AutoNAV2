@@ -72,18 +72,18 @@ C:\Program Files\Autodesk\Navisworks Manage 2025\Plugins\AutoNAV\
 
 ## What's in the plugin
 
-Six functions plus a one-button AutoNAVismate tab:
+Five tabs: **1. Setup** (Functions 1–3), **2. Clash Tests** (Function 4), **3. Group Clashes** (Functions 5–7), **4. Rename**, **5. AutoNAVismate**.
 
 | Function | Purpose |
 |---|---|
-| 1 | Create per-discipline search sets from loaded model filenames (NCS dictionary + per-file fallback + picker for unknowns). |
-| 2 | Create element-property search sets (System Abbreviation / Workset / etc., discipline-aware). |
-| 3 | Custom search sets from any property value in a discipline's model. |
-| 4 | Generate every cross-discipline clash test pair and auto-run them. |
-| 5 | Group clash results into Walls / Floors per discipline pair. |
-| 6 | Group clashes by proximity (nearest grid intersection) and name with the chosen template. Status filters + Rename Selected support. |
-| 7 | Manual / advanced grouping fallback with primary + sub-grouping mode dropdowns. |
-| **AutoNAVismate** | Single-button workflow runner that executes 1 → 2 → 4 → 5 → 6 with sensible defaults. |
+| 1 | One search set per loaded model in `1. DISCIPLINES`, selecting that whole model and nothing else. The search is *Item Name contains* the shortest unique tail of the model's name **including the extension** (`ARCH_L01_PAGE.nwc` / `ARCH_L01_HOK.nwc` → `PAGE.nwc` / `HOK.nwc`; `A.nwc` → `A.nwc`, never a bare `A`). The set is named without the extension (`PAGE`). If even the full name sits inside another model's name, the search is *Name equals* the full name. The discipline dictionary (ARCH, STR, MECH…) only tags each set for Function 2 defaults and Function 4 ordering. |
+| 2 | Element-property search sets in `2. CLASH SETS/<model set>/`. Every set's search scope is its model's Function 1 set, so *Walls* only finds walls in that model; the summary flags any set saved without that scope. |
+| 3 | Custom search sets from any property value in a model, scoped the same way. |
+| 4 | Generate every clash test pair from `2. CLASH SETS` and auto-run them. |
+| Group Clashes (5 + 6) | Per test: existing groups are kept; loose clashes touching a Walls / Floors set go into **Walls** / **Floors** first; the rest are grouped by nearest grid intersection + clashed set pair and named `{Month}/{Day}_{Level}_{Area} \| {TestName} - {SelectionA} vs {SelectionB} {#}`. Single clashes and clashes with no grid stay loose unless there are more than the limit (default 15, editable), in which case they're grouped by clashed set pair as `{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}`. Walls / Floors groups are only broken up when *Ungroup existing Walls / Floors groups* is ticked. |
+| 5 | Walls / Floors only (the first step above), keeping existing groups. |
+| 7 | Manual grouping modes (primary + sub-grouping dropdowns). |
+| **AutoNAVismate** | One button: 1 → 2 → 4 → Group Clashes with the defaults. |
 
 ## Model sources
 
@@ -91,11 +91,11 @@ AutoNAV is built around Navisworks exports (`.nwc`), and also works with:
 
 | Source | How AutoNAV handles it |
 |---|---|
-| `.nwc` / `.nwd` exports | Discipline sets are live search sets on the model name (unchanged). |
-| Native Revit (`.rvt`) appended directly | Same as `.nwc`: the `.rvt` extension is ignored when reading the discipline code. |
-| Cloud-hosted models (Autodesk Docs / Forma, incl. Model Coordination) | The discipline code is read from the model's Selection Tree name when its file is a GUID/URN cache file. If the tree name doesn't contain the code, the discipline set is saved as a fixed list of those models (Function 1's summary lists them; delete and re-run Function 1 to include models appended later). |
+| `.nwc` / `.nwd` exports | One live search set per model on its Selection Tree name (see Function 1). |
+| Native Revit (`.rvt`) appended directly | Same as `.nwc`, with `.rvt` in the search value. |
+| Cloud-hosted models (Autodesk Docs / Forma, incl. Model Coordination) | Same, using the Selection Tree name. If that name is a GUID / URN rather than a file name, the model gets a fixed set of that model (named from its file name), listed in Function 1's summary. |
 
-Models opened from Model Coordination load Autodesk's cloud (SVF) representation, which has no **Element** tab ([Autodesk article](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Revit-model-element-properties-appear-to-be-missing-in-Navisworks.html)). When Function 2's chosen property (e.g. *Element → System Abbreviation*) finds nothing, it looks for the same property under whichever tab holds it; category values such as "Revit Walls" are named "Walls" so Function 5 still finds Walls / Floors. Function 3 lists the properties those models actually have. Grid / level grouping puts clashes in "No Grid intersection" / "No Level" when the models carry no grids.
+Models opened from Model Coordination load Autodesk's cloud (SVF) representation, which has no **Element** tab ([Autodesk article](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Revit-model-element-properties-appear-to-be-missing-in-Navisworks.html)). When Function 2's chosen property (e.g. *Element → System Abbreviation*) finds nothing, it looks for the same property under whichever tab holds it; category values such as "Revit Walls" are named "Walls" so Function 5 still finds Walls / Floors. Function 3 lists the properties those models actually have. When the models carry no grids, Group Clashes leaves clashes loose or, above the limit, groups them with the fallback template (Function 7's grid / level modes use "No Grid intersection" / "No Level").
 
 ## For developers
 

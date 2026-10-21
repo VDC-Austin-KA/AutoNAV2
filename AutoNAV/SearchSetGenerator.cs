@@ -117,37 +117,33 @@ namespace AutoNAV
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // Function 1 — Discipline Search Sets
+        // Function 1 — one search set per loaded model
         //
-        //   Looks at ALL loaded model filenames together, groups files that
-        //   belong to the same discipline (same non-level segments), then
-        //   finds the MINIMUM CONTAINS pattern that:
-        //     • Appears in every file of that discipline group
-        //     • Does NOT appear in files from any other discipline group
-        //     • Is as short as possible (shortest single segment first;
-        //       falls back to multi-segment if needed)
+        //   Every model (file) gets its own set in "1. DISCIPLINES" that selects
+        //   that model's Selection Tree root, and so the whole model, and
+        //   nothing else.  The search value is the shortest tail of the root
+        //   name, extension included, that no other loaded model's name
+        //   contains:
+        //       AAA_BBB_CC.nwc / AAA_BBA_CC.nwc / AAB_BBB_CC.nwc
+        //         -> "AAA_BBB_CC.nwc" / "BBA_CC.nwc" / "AAB_BBB_CC.nwc"
+        //       ARCH_L01_PAGE.nwc / ARCH_L01_HOK.nwc -> "PAGE.nwc" / "HOK.nwc"
+        //       A.nwc / M.nwc / S.nwc              -> "A.nwc" / "M.nwc" / "S.nwc"
+        //   Keeping the extension in the value means it only ever matches file
+        //   nodes, never elements named "A".  The set is named without the
+        //   extension ("PAGE").  When even the full name is contained in
+        //   another model's name (A.nwc inside DATA.nwc), or the root name has
+        //   no extension, the search is "Name equals <full root name>".
+        //   Cloud models whose root name is a GUID / URN are saved as a fixed
+        //   set of that model instead.
         //
-        //   One search set per unique pattern:
-        //     DisplayName : clean name (separators stripped)  e.g. "MP"
-        //     Search Cond : LcOaSceneBaseUserName CONTAINS "-MP-"
-        //     Scope       : all items (locator="/")
-        //
-        //   Works with any separator ("-" or "_") and any naming convention.
-        //   Multi-floor files (same discipline, different level) collapse into
-        //   one search set because they share the same discriminating pattern.
-        //
-        //   User selection path (via dialog):
-        //     - Displays preview of detected patterns with matched files
-        //     - User can edit display names and search patterns
-        //     - Creates search sets from user-confirmed selections
+        //   The discipline dictionary (ARCH, STR, MECH, …) still tags each set
+        //   with its discipline for Function 2's property defaults and
+        //   Function 4's Selection-A priority; it no longer names or merges sets.
         // ─────────────────────────────────────────────────────────────────────
         public static void GenerateFunction1SearchSets() => GenerateFunction1SearchSets(false);
 
-        // multiLevel = false reproduces today's behaviour byte-for-byte (one
-        // set per discipline, named "ARCH"). multiLevel = true keys the
-        // de-dupe on (pattern, level) instead of pattern alone, so per-level
-        // variants of a discipline no longer collapse into one set, and names
-        // the result "L01-ARCH".
+        // multiLevel is kept for callers; every model now gets its own set, so
+        // per-level files are already separate sets.
         public static void GenerateFunction1SearchSets(bool multiLevel)
         {
             try
@@ -166,40 +162,43 @@ namespace AutoNAV
                     return;
                 }
 
-                // Collect each loaded model's name (no extension). ModelNames
-                // prefers a recognisable name, so cloud-hosted models whose
-                // cache file is a GUID still classify by their real name.
-                var allFileNames = new List<string>();
+                // Each model's Selection Tree root name (what the search tests);
+                // models whose root name is a GUID / URN fall back to their file
+                // name and get a fixed set.
+                var treeNames = new List<string>();
+                var fixedRoots = new Dictionary<string, List<ModelItem>>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < models.Count; i++)
                 {
-                    string noExt = ModelNames.Display(models[i]);
-                    if (!string.IsNullOrWhiteSpace(noExt))
-                        allFileNames.Add(noExt);
+                    Model m = models[i];
+                    string tree = ModelNames.TreeName(m, out bool searchable);
+                    if (string.IsNullOrWhiteSpace(tree)) continue;
+                    if (!treeNames.Contains(tree, StringComparer.OrdinalIgnoreCase)) treeNames.Add(tree);
+                    if (!searchable && m.RootItem != null)
+                    {
+                        if (!fixedRoots.TryGetValue(tree, out var roots)) fixedRoots[tree] = roots = new List<ModelItem>();
+                        roots.Add(m.RootItem);
+                    }
                 }
 
-                // Classify every loaded file via the discipline dictionary, with
-                // shortest-unique-discriminator as the per-file fallback.
-                var picks = ClassifyFiles(allFileNames);
-                if (picks.Count == 0)
+                List<FileSetSpec> specs = ComputeFileSetSpecs(treeNames);
+                if (specs.Count == 0)
                 {
-                    Notifier.Warning("Could not derive discipline patterns from the loaded model names.");
+                    Notifier.Warning("Could not read any model names from the loaded models.");
                     return;
                 }
 
-                // If any file landed on the fallback path, offer the user a
-                // chance to override its discipline before search sets are
-                // created.
+                // Discipline per model, for Function 2 / Function 4 only.  Files
+                // the dictionary can't place are offered once in the picker.
+                var picks = ClassifyFiles(specs.Select(sp => ModelNames.SplitExtension(sp.TreeName).Stem).ToList());
+                var canonicalByStem = picks.ToDictionary(p => p.SourceFile, p => p.FromDictionary ? p.CanonicalName : null,
+                                                         StringComparer.OrdinalIgnoreCase);
                 var unresolved = picks.Where(p => !p.FromDictionary).ToList();
                 if (unresolved.Count > 0)
                 {
                     var dlg = new UnknownDisciplineDialog(unresolved, DisciplineDictionary);
-                    // Best-effort owner: find a WPF window that's actually
-                    // visible.  Inside Navisworks Application.Current.MainWindow
-                    // can be a Win32-hosted Window that hasn't been WPF-shown,
-                    // and setting Owner to such a window throws InvalidOperationException
-                    // "Cannot set Owner property to a Window that has not been
-                    // shown previously."  Falling back to no owner still gives
-                    // a working modal dialog.
+                    // Best-effort owner: a visible WPF window.  Inside Navisworks
+                    // Application.Current.MainWindow can be a Win32-hosted Window
+                    // that was never WPF-shown, and using it as Owner throws.
                     try
                     {
                         Window owner = null;
@@ -207,11 +206,7 @@ namespace AutoNAV
                         {
                             foreach (Window w in System.Windows.Application.Current.Windows)
                             {
-                                if (w != dlg && w.IsVisible)
-                                {
-                                    owner = w;
-                                    break;
-                                }
+                                if (w != dlg && w.IsVisible) { owner = w; break; }
                             }
                         }
                         if (owner != null) dlg.Owner = owner;
@@ -219,61 +214,13 @@ namespace AutoNAV
                     catch { /* dialog still works without an owner */ }
                     dlg.ShowDialog();
 
-                    // Merge user choices back into the pick list.  Tokens are
-                    // stored bare (no separator wrap) so the runtime search
-                    // matches regardless of which separator the filename uses.
+                    // The picked discipline only tags the set; the set's name and
+                    // search stay unique to its file.
                     foreach (var chosen in dlg.Choices)
                     {
-                        // Match by source file; replace the pick in-place.
-                        for (int i = 0; i < picks.Count; i++)
-                        {
-                            if (string.Equals(picks[i].SourceFile, chosen.Key, StringComparison.OrdinalIgnoreCase))
-                            {
-                                string token = chosen.Value?.Trim();
-                                if (!string.IsNullOrEmpty(token))
-                                {
-                                    var p = picks[i];
-                                    p.DisplayName = token;
-                                    // Keep searching on text that is in this file's name. A
-                                    // picked discipline code (e.g. "ARCH") usually isn't, so
-                                    // searching on it would select nothing, or fold this file
-                                    // into another file's set and leave it with none.
-                                    if (p.SourceFile.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
-                                        p.Pattern = token;
-                                    p.FromDictionary = true;
-                                    p.CanonicalName = TryMatchDiscipline(token, out _, out string canon) ? canon : token;
-                                    picks[i] = p;
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Collapse to unique patterns (multiple files can share one
-                // discipline → one search set).  Patterns are bare tokens now,
-                // so the display name == pattern.
-                //
-                // multiLevel keys the de-dupe on (pattern, level) instead of
-                // pattern alone, so files that would otherwise collapse into
-                // one discipline set (e.g. "-ARCH-L01" and "-ARCH-L02" both
-                // reducing to "ARCH") instead produce one set per level,
-                // named "L01-ARCH".
-                var seenPatterns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var patternEntries = new List<(string Pattern, string Level, string DisplayName, string Canonical)>();
-                foreach (var p in picks)
-                {
-                    string dedupeKey = multiLevel ? (p.Pattern + "|" + (p.Level ?? "")) : p.Pattern;
-                    if (seenPatterns.Add(dedupeKey))
-                    {
-                        string token = StripSeparatorWrapping(p.DisplayName);
-                        string displayName = (multiLevel && !string.IsNullOrEmpty(p.Level))
-                            ? p.Level + "-" + token
-                            : token;
-                        string canonical = p.FromDictionary
-                            ? p.CanonicalName
-                            : (TryMatchDiscipline(p.DisplayName, out _, out string canon) ? canon : null);
-                        patternEntries.Add((p.Pattern, multiLevel ? p.Level : null, displayName, canonical));
+                        string token = chosen.Value?.Trim();
+                        if (string.IsNullOrEmpty(token)) continue;
+                        canonicalByStem[chosen.Key] = TryMatchDiscipline(token, out _, out string canon) ? canon : token;
                     }
                 }
 
@@ -300,11 +247,11 @@ namespace AutoNAV
                     return;
                 }
 
-                // Existing set name → its search terms, so a name clash can be
-                // told apart from the very same set being created again.
+                // Existing set name → its search values, so a name clash can be
+                // told apart from the very same set being created again.  A fixed
+                // (model list) set has no values to compare: null means "treat as
+                // the set from an earlier run".
                 var existing = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-                // A fixed (model list) set has no terms to compare: null means
-                // "treat as the set from an earlier run".
                 foreach (SavedItem c in discFolder.Children)
                     existing[c.DisplayName.Trim()] = ModelNames.IsFixedSet(c as SelectionSet)
                         ? null : GetSearchPatternsFromSet(c as SelectionSet);
@@ -312,30 +259,30 @@ namespace AutoNAV
                 int created = 0;
                 int skipped = 0;
                 var errors = new List<string>();
-                var createdNames = new List<string>();
+                var createdLines = new List<string>();
                 var fixedNames = new List<string>();
 
-                foreach (var entry in patternEntries)
+                foreach (FileSetSpec spec in specs)
                 {
-                    var terms = new List<string> { entry.Pattern };
-                    if (!string.IsNullOrEmpty(entry.Level)) terms.Add(entry.Level);
+                    var terms = new List<string> { spec.Value };
 
                     // A name already taken by a set that searches for something
-                    // else gets "2" (then "3", …) appended, so every discipline is
-                    // still created and offered. The same name with the same
-                    // search is the set from an earlier run: keep it, add nothing.
-                    string displayName = entry.DisplayName;
+                    // else gets "2" (then "3", …) appended, so every model still
+                    // gets its set. The same name with the same search is the set
+                    // from an earlier run: keep it, add nothing.
+                    string displayName = spec.SetName;
                     bool alreadyPresent = false;
                     for (int n = 2; existing.TryGetValue(displayName, out List<string> existingTerms); n++)
                     {
                         if (existingTerms == null || SameTerms(existingTerms, terms)) { alreadyPresent = true; break; }
-                        displayName = entry.DisplayName + n;
+                        displayName = spec.SetName + n;
                     }
 
                     // Registry must be keyed on the *actual set name* —
-                    // Function 2's LoadDisciplineList and the clash-test
-                    // priority sort look it up by that name.
-                    DisciplineRegistry[displayName] = entry.Canonical;
+                    // Function 2's discipline list and the clash-test priority
+                    // sort look it up by that name.
+                    canonicalByStem.TryGetValue(ModelNames.SplitExtension(spec.TreeName).Stem, out string canonical);
+                    DisciplineRegistry[displayName] = canonical;
                     if (alreadyPresent) { skipped++; continue; }
 
                     // Refresh folder reference each iteration
@@ -345,17 +292,12 @@ namespace AutoNAV
 
                     try
                     {
-                        // A name search finds a model by its Selection Tree name.
-                        // Cloud-hosted models can show a tree name without the
-                        // code their file name matched on, so the search would
-                        // select nothing: save those models as a fixed set instead.
-                        List<Model> matched = FindModelsForDiscipline(doc, terms);
                         SelectionSet ss;
-                        if (matched.Count > 0 && !matched.All(m => ModelNames.RootNameHasAll(m, terms)))
+                        if (fixedRoots.TryGetValue(spec.TreeName, out List<ModelItem> roots))
                         {
-                            var roots = new ModelItemCollection();
-                            foreach (Model m in matched) roots.Add(m.RootItem);
-                            ss = new SelectionSet(roots) { DisplayName = displayName };
+                            var items = new ModelItemCollection();
+                            foreach (ModelItem r in roots) items.Add(r);
+                            ss = new SelectionSet(items) { DisplayName = displayName };
                             fixedNames.Add(displayName);
                         }
                         else
@@ -363,43 +305,36 @@ namespace AutoNAV
                             var search = new Search();
                             search.Locations = SearchLocations.DescendantsAndSelf;
                             search.Selection.SelectAll();
-                            foreach (string term in terms)
-                            {
-                                search.SearchConditions.Add(
-                                    SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
-                                        .DisplayStringContains(term));
-                            }
+                            var name = SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName");
+                            search.SearchConditions.Add(spec.Exact
+                                ? name.EqualValue(VariantData.FromDisplayString(spec.Value))
+                                : name.DisplayStringContains(spec.Value));
                             ss = new SelectionSet(search) { DisplayName = displayName };
                         }
 
                         selSets.AddCopy(discFolder, ss);
                         existing[displayName] = terms;
-                        createdNames.Add(displayName);
+                        createdLines.Add(string.Format("{0}  (Name {1} \"{2}\"{3})", displayName,
+                            spec.Exact ? "=" : "contains", spec.Value,
+                            string.IsNullOrEmpty(canonical) ? "" : ", " + canonical));
                         created++;
                     }
                     catch (Exception ex)
                     {
-                        errors.Add(string.Format("'{0}' (pattern: '{1}'): {2}", displayName, entry.Pattern, ex.Message));
+                        errors.Add(string.Format("'{0}' (value: '{1}'): {2}", displayName, spec.Value, ex.Message));
                     }
                 }
 
-                string msg = BuildStamp + "\n" + string.Format("Function 1 complete.\nModels detected: {0}\nPatterns derived: {1}\nCreated: {2}  |  Skipped (existing): {3}",
-                    allFileNames.Count, patternEntries.Count, created, skipped);
+                string msg = BuildStamp + "\n" + string.Format("Function 1 complete.\nModels: {0}\nCreated: {1}  |  Skipped (existing): {2}",
+                    treeNames.Count, created, skipped);
 
                 if (errors.Count > 0)
                     msg += "\n\nErrors:\n" + string.Join("\n", errors);
-
-                if (createdNames.Count > 0)
-                    msg += "\n\nCreated: " + string.Join(", ", createdNames);
+                if (createdLines.Count > 0)
+                    msg += "\n\nCreated:\n" + string.Join("\n", createdLines);
                 if (fixedNames.Count > 0)
-                    msg += "\n\nSaved as fixed model lists (their Selection Tree names don't contain the discipline code, " +
-                           "as with some cloud-hosted models): " + string.Join(", ", fixedNames) +
-                           "\nTo include models appended later, delete these sets and run Function 1 again.";
-                if (patternEntries.Count > 0)
-                    msg += "\n\nPatterns: " + string.Join(", ", patternEntries.Select(p => p.Pattern + (p.Level != null ? "+" + p.Level : "")));
-
-                if (allFileNames.Count > 0 && allFileNames.Count <= 20)
-                    msg += "\n\nFiles: " + string.Join(", ", allFileNames);
+                    msg += "\n\nSaved as a fixed model (Selection Tree name is a cloud ID, not a file name): " +
+                           string.Join(", ", fixedNames);
 
                 Notifier.Warning(msg);
             }
@@ -407,6 +342,55 @@ namespace AutoNAV
             {
                 Notifier.Error("Error in Function 1:\n\n" + ex.Message + "\n\n" + ex.StackTrace);
             }
+        }
+
+        // One model's Function 1 set: the Selection Tree name it was made for,
+        // the search value, whether the search is "equals" rather than
+        // "contains", and the set's name (value without the extension).
+        public struct FileSetSpec
+        {
+            public string TreeName;
+            public string Value;
+            public bool   Exact;
+            public string SetName;
+        }
+
+        // Shortest unique tail of each name (see the Function 1 header).  Tails
+        // start at the beginning of a name segment (after - _ space or .), so
+        // a value never starts mid-word.
+        public static List<FileSetSpec> ComputeFileSetSpecs(List<string> treeNames)
+        {
+            var names = treeNames.Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n.Trim())
+                                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var specs = new List<FileSetSpec>();
+            foreach (string full in names)
+            {
+                var (stem, ext) = ModelNames.SplitExtension(full);
+                var others = names.Where(o => !o.Equals(full, StringComparison.OrdinalIgnoreCase)).ToList();
+                var otherStems = others.Select(o => ModelNames.SplitExtension(o).Stem).ToList();
+                var spec = new FileSetSpec { TreeName = full, Value = full, Exact = true, SetName = stem };
+
+                if (ext.Length > 0)
+                {
+                    var starts = new List<int> { 0 };
+                    for (int i = 1; i < stem.Length; i++)
+                        if (IsSep(stem[i - 1]) || stem[i - 1] == '.') starts.Add(i);
+                    for (int k = starts.Count - 1; k >= 0; k--)
+                    {
+                        string tail = stem.Substring(starts[k]);
+                        if (tail.Trim(AllSeparators).Length == 0) continue;
+                        // Unique with and without the extension, so the set
+                        // name (which drops it) is as unambiguous as the value.
+                        string value = tail + ext;
+                        if (others.Any(o => o.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+                        if (otherStems.Any(o => o.IndexOf(tail, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
+                        spec = new FileSetSpec { TreeName = full, Value = value, Exact = false, SetName = tail };
+                        break;
+                    }
+                }
+                specs.Add(spec);
+            }
+            return specs;
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -544,11 +528,12 @@ namespace AutoNAV
                             searchPattern = extracted;
                     }
 
-                    // Find the discipline's models: straight from a fixed set,
-                    // otherwise by name.
-                    List<Model> discModels = ModelNames.IsFixedSet(discSearchSet as SelectionSet)
-                        ? ModelNames.ModelsInFixedSet(doc, (SelectionSet)discSearchSet)
-                        : FindModelsForDiscipline(doc, searchPattern);
+                    // The discipline's models are the ones its Function 1 set
+                    // actually selects; sets from older versions fall back to
+                    // matching the model name.
+                    List<Model> discModels = ModelNames.ModelsSelectedBy(doc, discSearchSet as SelectionSet);
+                    if (discModels.Count == 0)
+                        discModels = FindModelsForDiscipline(doc, searchPattern);
                     if (discModels.Count == 0)
                     {
                         errors.Add(string.Format("'{0}': no matching model files found", discipline));
@@ -624,6 +609,17 @@ namespace AutoNAV
 
                             selSets.AddCopy(discFolder, ss);
                             totalCreated++;
+
+                            // The discipline set must be this set's search scope,
+                            // or e.g. "Walls" would pick up walls from every model.
+                            // Read the saved copy back and say so if it isn't.
+                            root        = doc.SelectionSets.RootItem as GroupItem;
+                            clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
+                            var saved = (clashFolder != null ? FindFolder(clashFolder, discipline) : null)?
+                                .Children.OfType<SelectionSet>()
+                                .FirstOrDefault(c => c.DisplayName.Equals(setName, StringComparison.OrdinalIgnoreCase));
+                            if (saved?.Search?.Selection?.SelectionSources == null || saved.Search.Selection.SelectionSources.Count == 0)
+                                errors.Add(string.Format("'{0}/{1}': saved without the '{0}' scope", discipline, setName));
                         }
                         catch (Exception ex)
                         {
@@ -1119,8 +1115,8 @@ namespace AutoNAV
         // it also works when the set was renamed away from its pattern.
         private static List<Model> ModelsForDisciplineSet(Document doc, SavedItem discSet, string discipline)
         {
-            if (ModelNames.IsFixedSet(discSet as SelectionSet))
-                return ModelNames.ModelsInFixedSet(doc, (SelectionSet)discSet);
+            List<Model> selected = ModelNames.ModelsSelectedBy(doc, discSet as SelectionSet);
+            if (selected.Count > 0) return selected;
             var patterns = GetSearchPatternsFromSet(discSet as SelectionSet);
             if (patterns.Count == 0) patterns.Add(discipline);
             List<Model> models = FindModelsForDiscipline(doc, patterns);

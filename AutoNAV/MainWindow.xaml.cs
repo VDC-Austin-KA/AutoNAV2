@@ -91,6 +91,9 @@ namespace AutoNAV
             var tabs = sender as TabControl;
             var item = tabs?.SelectedItem as TabItem;
             string header = item?.Header as string;
+            // Clash tests may have been created since the window opened.
+            if (header != null && header.IndexOf("Group", StringComparison.OrdinalIgnoreCase) >= 0)
+                SafeLoad(LoadClashTests, "LoadClashTests");
             if (header != null && header.IndexOf("Rename", StringComparison.OrdinalIgnoreCase) >= 0
                 && !_renameTabReady)
             {
@@ -593,19 +596,98 @@ namespace AutoNAV
         private const ClashGrouper.GroupingMode Function6PrimaryMode    = ClashGrouper.GroupingMode.GridIntersection;
         private const ClashGrouper.GroupingMode Function6SubGroupingMode = ClashGrouper.GroupingMode.None;
 
-        // Function 6 — Group selected test (proximity-driven).
+        // Group Clashes tab — selected test.
         private void OnGroupClashesClick(object sender, RoutedEventArgs e)
         {
-            GroupSingleTest("Function 6 — Group Clashes",
-                            Function6PrimaryMode, Function6SubGroupingMode);
+            string testName = (cmbClashTest.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (string.IsNullOrEmpty(testName))
+            {
+                NotifyWarning("Please select a clash test to group.");
+                return;
+            }
+            RunDefaultGrouping(t => t.DisplayName == testName);
         }
 
-        // Function 6 — Group all tests (proximity-driven).
+        // Group Clashes tab — every test.
         private void OnGroupAllTestsClick(object sender, RoutedEventArgs e)
         {
-            GroupAllTestsCore("Function 6 — Group All Tests",
-                              Function6PrimaryMode, Function6SubGroupingMode);
+            RunDefaultGrouping(t => true);
         }
+
+        // Runs ClashGrouper.GroupTestDefault with the Group Clashes tab's
+        // settings on every test that matches.  With no "loose clash" status
+        // ticked and some Regroup & Rename statuses ticked, it renames existing
+        // groups instead (the tab's regroup path).
+        private void RunDefaultGrouping(Func<ClashTest, bool> which)
+        {
+            try
+            {
+                Document doc = NavApp.ActiveDocument;
+                DocumentClash documentClash = doc?.GetClash();
+                if (documentClash == null)
+                {
+                    NotifyError("No active document / Clash Detective found.");
+                    return;
+                }
+                var tests = ClashCompat.EnumerateTests(documentClash.TestsData).Where(which).ToList();
+                if (tests.Count == 0)
+                {
+                    NotifyError("No matching clash tests found.");
+                    return;
+                }
+
+                string template = GetSelectedNamingTemplate();
+                var newStatuses = GetNewStatusFilter();
+                var regroupStatuses = GetRegroupStatusFilter();
+                if (newStatuses.Count == 0 && regroupStatuses.Count > 0)
+                {
+                    foreach (ClashTest test in tests)
+                        ClashGrouper.GroupClashes(test, Function6PrimaryMode, Function6SubGroupingMode, true,
+                                                  template, newStatuses, regroupStatuses);
+                    NotifyInfo($"Renamed existing groups in {tests.Count} test(s).");
+                    return;
+                }
+
+                string summary = GroupTestsWithDefaults(tests, template, txtFallbackTemplate.Text,
+                    ReadLooseThreshold(), chkRegroupWallsFloors.IsChecked == true, newStatuses);
+                NotifyResult("Group Clashes", summary);
+            }
+            catch (Exception ex)
+            {
+                NotifyError("Error grouping clashes:\n\n" + ex.Message);
+            }
+        }
+
+        // Shared by the Group Clashes tab and AutoNAVismate.
+        private static string GroupTestsWithDefaults(List<ClashTest> tests, string template, string fallbackTemplate,
+            int looseThreshold, bool regroupWallsFloors, ISet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> statuses)
+        {
+            var wfMap = ClashGrouper.BuildWallsFloorsMap(NavApp.ActiveDocument);
+            var lines = new List<string>();
+            int failed = 0;
+            foreach (ClashTest test in tests)
+            {
+                try
+                {
+                    var r = ClashGrouper.GroupTestDefault(test, template, fallbackTemplate, looseThreshold,
+                                                          regroupWallsFloors, statuses, wfMap);
+                    lines.Add($"{test.DisplayName}: Walls {r.Walls}, Floors {r.Floors}, " +
+                              $"by location {r.Located} in {r.LocatedGroups} group(s), " +
+                              $"fallback {r.Fallback} in {r.FallbackGroups} group(s), loose {r.Loose}");
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    lines.Add($"{test.DisplayName}: FAILED — {ex.Message}");
+                }
+            }
+            return $"Grouped {tests.Count - failed} test(s), {failed} failed.\n" +
+                   $"Template: {template}\nFallback (> {looseThreshold} loose): {fallbackTemplate}\n\n" +
+                   string.Join("\n", lines);
+        }
+
+        private int ReadLooseThreshold() =>
+            int.TryParse(txtLooseThreshold?.Text?.Trim(), out int n) && n >= 0 ? n : 15;
 
         // Function 7 — Group selected test using the user-picked primary/sub modes.
         private void OnFunction7GroupSelectedClick(object sender, RoutedEventArgs e)
@@ -947,10 +1029,10 @@ namespace AutoNAV
             btnAutoNAVismate.IsEnabled = false;
             try
             {
-                SetAutoProgress("Step 1/5  Function 1 — discipline search sets…");
+                SetAutoProgress("Step 1/4  Function 1 — per-model search sets…");
                 SearchSetGenerator.GenerateFunction1SearchSets(chkMultiLevelDiscipline.IsChecked == true);
 
-                SetAutoProgress("Step 2/5  Function 2 — element-property search sets…");
+                SetAutoProgress("Step 2/4  Function 2 — element-property search sets…");
                 // Refresh the discipline UI then run Function 2 with the
                 // default (first) property option for every discipline.
                 LoadDisciplineList();
@@ -964,7 +1046,7 @@ namespace AutoNAV
                     System.Diagnostics.Debug.WriteLine("[AutoNAV] AutoNAVismate Function 2 failed: " + ex.Message);
                 }
 
-                SetAutoProgress("Step 3/5  Function 4 — generating + running clash tests…");
+                SetAutoProgress("Step 3/4  Function 4 — generating + running clash tests…");
                 bool clashRunOk = false;
                 try
                 {
@@ -984,22 +1066,29 @@ namespace AutoNAV
                     NotifyWarning("AutoNAVismate: Function 4 auto-run failed. Open Clash Detective and click \"Update All\" after the workflow finishes if results are empty.");
                 }
 
-                SetAutoProgress("Step 4/5  Function 5 — grouping Walls / Floors…");
+                SetAutoProgress("Step 4/4  Group Clashes — Walls / Floors first, then by location…");
                 try
                 {
-                    string summary = ClashGrouper.GroupAllTestsByWallsAndFloors();
-                    NotifyResult("Function 5 — Walls / Floors grouping", summary);
+                    // Default grouping: first naming template, existing groups kept.
+                    DocumentClash dc = NavApp.ActiveDocument?.GetClash();
+                    var tests = dc == null ? new List<ClashTest>() : ClashCompat.EnumerateTests(dc.TestsData).ToList();
+                    string template = (cmbNamingTemplate.Items[0] as ComboBoxItem)?.Tag as string ?? "";
+                    var statuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>
+                    {
+                        Autodesk.Navisworks.Api.Clash.ClashResultStatus.New,
+                        Autodesk.Navisworks.Api.Clash.ClashResultStatus.Active,
+                        Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed,
+                    };
+                    NotifyResult("Group Clashes", GroupTestsWithDefaults(tests, template, txtFallbackTemplate.Text,
+                        ReadLooseThreshold(), false, statuses));
                 }
                 catch (Exception ex)
                 {
-                    NotifyError("Function 5 failed: " + ex.Message);
+                    NotifyError("Group Clashes failed: " + ex.Message);
                 }
 
-                SetAutoProgress("Step 5/5  Function 6 — grouping + naming remaining clashes…");
-                RunFunction6WithDefaults();
-
                 SetAutoProgress("AutoNAVismate complete. Open Clash Detective to review.");
-                NotifySuccess("AutoNAVismate finished — all five steps ran. Open Clash Detective to review results.");
+                NotifySuccess("AutoNAVismate finished — all four steps ran. Open Clash Detective to review results.");
             }
             catch (Exception ex)
             {
@@ -1039,60 +1128,6 @@ namespace AutoNAV
         {
             if (txtAutoNAVismateProgress != null) txtAutoNAVismateProgress.Text = msg;
             System.Diagnostics.Debug.WriteLine("[AutoNAVismate] " + msg);
-        }
-
-        // Loops every clash test, calls GroupClashes with the default template
-        // and "Keep existing groups" semantics so Function 5's work survives.
-        private void RunFunction6WithDefaults()
-        {
-            Document doc = NavApp.ActiveDocument;
-            if (doc == null) return;
-            DocumentClash documentClash = doc.GetClash();
-            if (documentClash == null) return;
-            var tests = ClashCompat.GetTopLevelTests(documentClash.TestsData);
-            if (tests.Count == 0) return;
-
-            // Default template = first preset (the user-spec example).
-            string template = (cmbNamingTemplate.Items[0] as ComboBoxItem)?.Tag as string ?? "";
-
-            // AutoNAVismate workflow per Keith's spec (Nov 2026):
-            //   1. Group every test using the legacy proximity mode WITHOUT a
-            //      template (so groups get their legacy mode-derived names,
-            //      and any existing Walls/Floors groups from Function 5 keep
-            //      their names too).
-            //   2. Rename every resulting group EXCEPT those literally named
-            //      "Walls" or "Floors" using the default template.  This way
-            //      Function 5's output stays untouched and the rest of the
-            //      groups land on the project's standard naming convention.
-            var newStatuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>
-            {
-                Autodesk.Navisworks.Api.Clash.ClashResultStatus.New,
-            };
-            var noRegroup = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>();
-
-            foreach (ClashTest test in tests)
-            {
-                try
-                {
-                    // Step 1: legacy grouping (no template → legacy auto-names).
-                    ClashGrouper.GroupClashes(
-                        test,
-                        Function6PrimaryMode,
-                        Function6SubGroupingMode,
-                        keepExistingGroups: true,
-                        namingTemplate: "",                // ← legacy names
-                        newStatusFilter: newStatuses,
-                        regroupStatusFilter: noRegroup);
-
-                    // Step 2: rename every group in this test using the template,
-                    // excluding "Walls" / "Floors" groups (Function 5's output).
-                    RenameGroupsExcludingWallsFloors(test, template);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[AutoNAVismate] F6 failed for '{test.DisplayName}': {ex.Message}");
-                }
-            }
         }
 
         private ClashGrouper.GroupingMode ParseGroupingMode(string modeStr)

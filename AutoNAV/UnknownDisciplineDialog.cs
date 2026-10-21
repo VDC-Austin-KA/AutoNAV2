@@ -65,7 +65,8 @@ namespace AutoNAV
             headerStack.Children.Add(new TextBlock
             {
                 Text = $"Function 1 couldn't match {unresolved.Count} file(s) to a known discipline. " +
-                       "Pick a discipline or keep the auto-derived token.",
+                       "Pick a discipline or keep the auto-derived token. This only tags the file's " +
+                       "search set (for Function 2 defaults and clash-test order); its name and search stay unique to the file.",
                 Foreground = (Brush)new BrushConverter().ConvertFromString("#E0E0E0"),
                 FontSize = 11,
                 TextWrapping = TextWrapping.Wrap,
