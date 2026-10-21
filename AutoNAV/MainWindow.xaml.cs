@@ -22,6 +22,7 @@ namespace AutoNAV
         public MainWindow()
         {
             InitializeComponent();
+            BuildTemplateTokenButtons();
             _searchSetGenerator = new SearchSetGenerator();
             _clashEngine = new ClashTestGeneratorEngine();
             _currentPropertyCategories = new List<SearchSetGenerator.PropertyCategoryInfo>();
@@ -637,6 +638,11 @@ namespace AutoNAV
                 }
 
                 string template = GetSelectedNamingTemplate();
+                if (string.IsNullOrWhiteSpace(template))
+                {
+                    NotifyWarning("The naming template is empty — type a custom template or pick a preset.");
+                    return;
+                }
                 var newStatuses = GetNewStatusFilter();
                 var regroupStatuses = GetRegroupStatusFilter();
                 if (newStatuses.Count == 0 && regroupStatuses.Count > 0)
@@ -913,10 +919,77 @@ namespace AutoNAV
 
         // The selected template's literal string (Tag of the selected ComboBoxItem),
         // or "" for the "legacy auto-naming" entry.
+        private const string CustomTemplateTag = "__custom__";
+
         private string GetSelectedNamingTemplate()
         {
             var cb = cmbNamingTemplate?.SelectedItem as ComboBoxItem;
-            return cb?.Tag as string ?? "";
+            string tag = cb?.Tag as string ?? "";
+            return tag == CustomTemplateTag ? (txtCustomNamingTemplate?.Text ?? "").Trim() : tag;
+        }
+
+        // Every token the grouping and rename templates understand.
+        private static readonly string[] TemplateTokens =
+        {
+            "{Month}", "{Day}", "{Year}", "{Time}", "{Level}", "{Area}", "{TestName}",
+            "{SelectionA}", "{SelectionB}", "{ClashCount}", "{Status}", "{GroupIndex}", "{#}",
+        };
+
+        // The custom or fallback template box the user last clicked in; token
+        // buttons insert there.
+        private Control _lastTemplateBox;
+
+        private void BuildTemplateTokenButtons()
+        {
+            if (pnlTemplateTokens == null) return;
+            foreach (string token in TemplateTokens)
+            {
+                var b = new Button
+                {
+                    Content = token, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(8, 2, 8, 2),
+                    FontSize = 11, Cursor = System.Windows.Input.Cursors.Hand,
+                };
+                b.Click += (_, __) => InsertTemplateToken(token);
+                pnlTemplateTokens.Children.Add(b);
+            }
+        }
+
+        private void InsertTemplateToken(string token)
+        {
+            if (_lastTemplateBox is ComboBox fallback)
+            {
+                fallback.Text = (fallback.Text ?? "") + token;
+                return;
+            }
+            var box = txtCustomNamingTemplate;
+            int at = Math.Min(box.CaretIndex, box.Text.Length);
+            box.Text = box.Text.Insert(at, token);
+            box.CaretIndex = at + token.Length;
+            box.Focus();
+        }
+
+        private void OnTemplateBoxFocused(object sender, RoutedEventArgs e)
+        {
+            _lastTemplateBox = sender as Control;
+            if (ReferenceEquals(sender, txtCustomNamingTemplate)) SelectCustomTemplate();
+        }
+
+        private void OnCustomNamingTemplateChanged(object sender, TextChangedEventArgs e)
+        {
+            if (txtCustomNamingTemplate != null && txtCustomNamingTemplate.IsKeyboardFocusWithin) SelectCustomTemplate();
+            OnNamingTemplateChanged(sender, null);
+        }
+
+        // Typing in the custom box means "use it": pick the Custom entry.
+        private void SelectCustomTemplate()
+        {
+            if (cmbNamingTemplate == null) return;
+            foreach (var o in cmbNamingTemplate.Items)
+                if (o is ComboBoxItem ci && (ci.Tag as string) == CustomTemplateTag)
+                {
+                    if (!ReferenceEquals(cmbNamingTemplate.SelectedItem, ci)) cmbNamingTemplate.SelectedItem = ci;
+                    return;
+                }
         }
 
         // Reads the "New Clashes" status checkboxes; empty set means no filter.
@@ -964,7 +1037,7 @@ namespace AutoNAV
             string template = GetSelectedNamingTemplate();
             if (string.IsNullOrEmpty(template))
             {
-                txtNamingPreview.Text = "(legacy mode-specific names will be used)";
+                txtNamingPreview.Text = "(empty template — type one in the custom box or pick a preset)";
                 return;
             }
 
@@ -979,6 +1052,10 @@ namespace AutoNAV
                 .Replace("{TestName}", "ARCH vs STRC")
                 .Replace("{SelectionA}", "Railings")
                 .Replace("{SelectionB}", "Structural Framing")
+                .Replace("{Time}", "14:30")
+                .Replace("{ClashCount}", "12")
+                .Replace("{Status}", "New")
+                .Replace("{GroupIndex}", "1")
                 .Replace("{#}", "1");
             txtNamingPreview.Text = sample;
         }
@@ -1072,7 +1149,10 @@ namespace AutoNAV
                     // Default grouping: first naming template, existing groups kept.
                     DocumentClash dc = NavApp.ActiveDocument?.GetClash();
                     var tests = dc == null ? new List<ClashTest>() : ClashCompat.EnumerateTests(dc.TestsData).ToList();
-                    string template = (cmbNamingTemplate.Items[0] as ComboBoxItem)?.Tag as string ?? "";
+                    // First real preset (the list starts with a disabled heading).
+                    string template = cmbNamingTemplate.Items.OfType<ComboBoxItem>()
+                        .Select(ci => ci.Tag as string)
+                        .FirstOrDefault(t => !string.IsNullOrEmpty(t) && t != CustomTemplateTag) ?? "";
                     var statuses = new HashSet<Autodesk.Navisworks.Api.Clash.ClashResultStatus>
                     {
                         Autodesk.Navisworks.Api.Clash.ClashResultStatus.New,

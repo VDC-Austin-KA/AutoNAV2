@@ -3,7 +3,7 @@
   <CompanyName>Keith Acker</CompanyName>
   <AddInName>AutoNAV</AddInName>
   <AddInDescription>AutoNAV - Automated Design Coordination for Navisworks</AddInDescription>
-  <AddInVersion>3.17.0.0</AddInVersion>
+  <AddInVersion>3.18.0.0</AddInVersion>
   <FullClassName>AutoNAV.PluginMain</FullClassName>
   <AssemblyFile>AutoNAV.dll</AssemblyFile>
 </Addin>

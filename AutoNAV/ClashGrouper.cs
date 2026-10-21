@@ -121,9 +121,9 @@ namespace AutoNAV
                 }
                 else
                 {
-                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "");
+                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "", selectedClashTest);
                     if (subgroupingMode != GroupingMode.None)
-                        CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                        CreateSubGroups(ref clashResultGroups, subgroupingMode, selectedClashTest);
                     ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
                 }
 
@@ -214,10 +214,10 @@ namespace AutoNAV
                 }
                 else
                 {
-                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "");
+                    CreateGroup(ref clashResultGroups, groupingMode, clashResults, "", selectedClashTest);
 
                     if (subgroupingMode != GroupingMode.None)
-                        CreateSubGroups(ref clashResultGroups, subgroupingMode);
+                        CreateSubGroups(ref clashResultGroups, subgroupingMode, selectedClashTest);
 
                     ungroupedClashResults = RemoveOneClashGroup(ref clashResultGroups);
                 }
@@ -764,7 +764,8 @@ namespace AutoNAV
             ref List<ClashResultGroup> clashResultGroups,
             GroupingMode groupingMode,
             List<ClashResult> clashResults,
-            string initialName)
+            string initialName,
+            ClashTest test = null)
         {
             switch (groupingMode)
             {
@@ -772,7 +773,7 @@ namespace AutoNAV
                 case GroupingMode.Level:            clashResultGroups = GroupByLevel(clashResults, initialName); break;
                 case GroupingMode.GridIntersection: clashResultGroups = GroupByGridIntersection(clashResults, initialName); break;
                 case GroupingMode.SelectionA:
-                case GroupingMode.SelectionB:       clashResultGroups = GroupByElementOfAGivenSelection(clashResults, groupingMode, initialName); break;
+                case GroupingMode.SelectionB:       clashResultGroups = GroupByElementOfAGivenSelection(clashResults, groupingMode, initialName, test); break;
                 case GroupingMode.ModelA:
                 case GroupingMode.ModelB:           clashResultGroups = GroupByElementOfAGivenModel(clashResults, groupingMode, initialName); break;
                 case GroupingMode.ApprovedBy:
@@ -790,7 +791,7 @@ namespace AutoNAV
         }
 
         private static void CreateSubGroups(
-            ref List<ClashResultGroup> clashResultGroups, GroupingMode mode)
+            ref List<ClashResultGroup> clashResultGroups, GroupingMode mode, ClashTest test = null)
         {
             List<ClashResultGroup> clashResultSubGroups = new List<ClashResultGroup>();
 
@@ -803,7 +804,7 @@ namespace AutoNAV
                 }
 
                 List<ClashResultGroup> tempSubs = new List<ClashResultGroup>();
-                CreateGroup(ref tempSubs, mode, clashResults, group.DisplayName + "_");
+                CreateGroup(ref tempSubs, mode, clashResults, group.DisplayName + "_", test);
                 clashResultSubGroups.AddRange(tempSubs);
             }
 
@@ -861,6 +862,13 @@ namespace AutoNAV
                 .Replace("{Time}",        time);
         }
 
+        // Tokens that depend on the group itself rather than the naming context.
+        private static string FillExtraTokens(string name, ClashResultGroup g, int groupIndex) =>
+            name.Replace("{ClashCount}", CountClashLeaves(g).ToString())
+                .Replace("{Status}",     GetFirstClashStatus(g))
+                .Replace("{GroupIndex}", groupIndex.ToString())
+                .Replace("{Time}",       DateTime.Now.ToString("HH:mm"));
+
         private static int CountClashLeaves(ClashResultGroup g)
         {
             int n = 0;
@@ -915,11 +923,12 @@ namespace AutoNAV
             if (string.IsNullOrWhiteSpace(template)) return groups;
 
             var seq = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            int index = 0;
             foreach (var group in groups)
             {
                 var ctx = BuildContext(group, test);
                 string newName = ApplyNamingTemplate(template, ctx, seq);
-                if (!string.IsNullOrEmpty(newName)) group.DisplayName = newName;
+                if (!string.IsNullOrEmpty(newName)) group.DisplayName = FillExtraTokens(newName, group, ++index);
             }
             return groups;
         }
@@ -1310,6 +1319,7 @@ namespace AutoNAV
                 var ctx = BuildContext(g, test);
                 string newName = ApplyNamingTemplate(template, ctx, seq);
                 if (string.IsNullOrEmpty(newName)) continue;
+                newName = FillExtraTokens(newName, g, renamed + 1);
                 try
                 {
                     dct.TestsEditDisplayName(g, newName);
@@ -1426,15 +1436,33 @@ namespace AutoNAV
             return list;
         }
 
+        // Selection A / B: group by the clash test's search set that the clashed
+        // item belongs to (e.g. "Walls", "SA"), named after that set.  Items in
+        // none of the test's sets fall back to grouping by the element itself.
         private static List<ClashResultGroup> GroupByElementOfAGivenSelection(
-            List<ClashResult> results, GroupingMode mode, string initialName)
+            List<ClashResult> results, GroupingMode mode, string initialName, ClashTest test = null)
         {
             Dictionary<ModelItem, ClashResultGroup> groups = new Dictionary<ModelItem, ClashResultGroup>();
+            var bySet = new Dictionary<string, ClashResultGroup>(StringComparer.OrdinalIgnoreCase);
             List<ClashResultGroup> emptyGroups = new List<ClashResultGroup>();
+            bool sideA = mode == GroupingMode.SelectionA;
+            var map = test != null ? BuildSelectionMembershipMap(test, sideA) : null;
 
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
+
+                ModelItem clashed = null;
+                try { clashed = sideA ? copy.CompositeItem1 : copy.CompositeItem2; } catch { }
+                string setName = LookupSetName(clashed, map);
+                if (!string.IsNullOrEmpty(setName))
+                {
+                    if (!bySet.TryGetValue(setName, out ClashResultGroup sg))
+                        bySet[setName] = sg = new ClashResultGroup { DisplayName = initialName + setName };
+                    sg.Children.Add(copy);
+                    continue;
+                }
+
                 ModelItem mi = null;
 
                 if (mode == GroupingMode.SelectionA)
@@ -1465,7 +1493,7 @@ namespace AutoNAV
                 }
             }
 
-            List<ClashResultGroup> all = groups.Values.ToList();
+            List<ClashResultGroup> all = bySet.Values.Concat(groups.Values).ToList();
             all.AddRange(emptyGroups);
             return all;
         }
