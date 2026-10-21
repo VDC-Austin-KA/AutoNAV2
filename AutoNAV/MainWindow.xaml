@@ -696,15 +696,19 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Preset:" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0" FontSize="12" FontWeight="SemiBold"/>
                                     <ComboBox Name="cmbRenameTemplate" Grid.Column="1" SelectionChanged="OnRenameTemplateChanged">
-                                        <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                      Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                      IsSelected="True"/>
-                                        <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                      Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
-                                        <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
-                                                      Tag="{}{TestName} | {Level}_{Area} {#}"/>
-                                        <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
-                                                      Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="— with level —" IsEnabled="False" FontStyle="Italic" Foreground="{StaticResource TextMuted}"/>
+                                        <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" IsSelected="True"/>
+                                        <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}" Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="— without level —" IsEnabled="False" FontStyle="Italic" Foreground="{StaticResource TextMuted}"/>
+                                        <ComboBoxItem Content="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Area} - {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} | {Area} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} | {Area} {#}" Tag="{}{TestName} | {Area} {#}"/>
+                                        <ComboBoxItem Content="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <ComboBoxItem Content="{}{SelectionA} vs {SelectionB} {#}" Tag="{}{SelectionA} vs {SelectionB} {#}"/>
                                         <ComboBoxItem Content="(custom — use the text box below)" Tag="__CUSTOM__"/>
                                     </ComboBox>
                                 </Grid>
