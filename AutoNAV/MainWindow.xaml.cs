@@ -22,6 +22,11 @@ namespace AutoNAV
         public MainWindow()
         {
             InitializeComponent();
+            // The loaded build's version, so it's clear which copy Navisworks picked up.
+            string fileVersion = typeof(MainWindow).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyFileVersionAttribute), false)
+                .OfType<System.Reflection.AssemblyFileVersionAttribute>().FirstOrDefault()?.Version;
+            txtVersion.Text = "v" + (fileVersion ?? "?") + " · NW 2024–2027";
             BuildTemplateTokenButtons();
             _searchSetGenerator = new SearchSetGenerator();
             _clashEngine = new ClashTestGeneratorEngine();
