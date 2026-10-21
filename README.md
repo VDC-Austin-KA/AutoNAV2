@@ -82,7 +82,8 @@ Five tabs: **1. Setup** (Functions 1–3), **2. Clash Tests** (Function 4), **3.
 | 4 | Generate every clash test pair from `2. CLASH SETS` and auto-run them. |
 | Group Clashes (5 + 6) | Per test: existing groups are kept; loose clashes touching a Walls / Floors set go into **Walls** / **Floors** first; the rest are grouped by nearest grid intersection + clashed set pair and named `{Month}/{Day}_{Level}_{Area} \| {TestName} - {SelectionA} vs {SelectionB} {#}`. Single clashes and clashes with no grid stay loose unless there are more than the limit (default 15, editable), in which case they're grouped by clashed set pair as `{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}`. Walls / Floors groups are only broken up when *Ungroup existing Walls / Floors groups* is ticked. |
 | 5 | Walls / Floors only (the first step above), keeping existing groups. |
-| 7 | Manual grouping modes (primary + sub-grouping dropdowns). |
+| 7 | Manual grouping modes (primary + sub-grouping dropdowns). *Selection A / B* group and name by the clash test's search set the clashed item belongs to (e.g. "Walls"), falling back to the element only when it's in none of them. |
+| Templates | The naming list has presets with and without `{Level}`, plus **Custom** (type your own in the box below it). The fallback template is an editable list of the same presets. Token buttons insert any of `{Month} {Day} {Year} {Time} {Level} {Area} {TestName} {SelectionA} {SelectionB} {ClashCount} {Status} {GroupIndex} {#}` into the box you last clicked. |
 | **AutoNAVismate** | One button: 1 → 2 → 4 → Group Clashes with the defaults. |
 
 ## Model sources

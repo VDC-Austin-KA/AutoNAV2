@@ -500,21 +500,45 @@
 
                                         <TextBlock Style="{StaticResource FieldLabel}" Text="Naming template"/>
                                         <ComboBox Name="cmbNamingTemplate" SelectionChanged="OnNamingTemplateChanged" Margin="0,0,0,4">
-                                            <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                          Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                          IsSelected="True"/>
-                                            <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
-                                                          Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
-                                            <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"
-                                                          Tag="{}{TestName} | {Level}_{Area} {#}"/>
-                                            <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"
-                                                          Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="— with level —" IsEnabled="False" FontStyle="Italic" Foreground="{StaticResource TextMuted}"/>
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" IsSelected="True"/>
+                                            <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}" Tag="{}{TestName} | {Level}_{Area} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="— without level —" IsEnabled="False" FontStyle="Italic" Foreground="{StaticResource TextMuted}"/>
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Area} - {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} | {Area} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Area} {#}" Tag="{}{TestName} | {Area} {#}"/>
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} - {SelectionA} vs {SelectionB} {#}" Tag="{}{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{SelectionA} vs {SelectionB} {#}" Tag="{}{SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="Custom — type your own template in the box below" Tag="__custom__"/>
                                         </ComboBox>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Custom template (used when Custom is picked above)"/>
+                                        <TextBox Name="txtCustomNamingTemplate" Margin="0,0,0,4"
+                                                 Text="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"
+                                                 GotFocus="OnTemplateBoxFocused" TextChanged="OnCustomNamingTemplateChanged"/>
                                         <TextBlock Name="txtNamingPreview" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
-                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Fallback template (used when too many clashes are left loose)"/>
-                                        <TextBox Name="txtFallbackTemplate" Margin="0,0,0,4"
-                                                 Text="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Fallback template (used when too many clashes are left loose) — pick one or type your own"/>
+                                        <ComboBox Name="txtFallbackTemplate" IsEditable="True" Margin="0,0,0,4" GotFocus="OnTemplateBoxFocused"
+                                                  Text="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}">
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Area} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Area} {#}"/>
+                                            <ComboBoxItem Content="{}{Month}/{Day}_{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{Level}_{Area} | {TestName} - {SelectionA} vs {SelectionB} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_{Area} {#}"/>
+                                            <ComboBoxItem Content="{}{TestName} | {Level}_ {SelectionA} vs {SelectionB} {#}"/>
+                                        </ComboBox>
+
+                                        <TextBlock Style="{StaticResource Hint}" Text="Available tokens — click one to add it to the custom or fallback template you last clicked in:" Margin="0,4,0,2"/>
+                                        <WrapPanel Name="pnlTemplateTokens" Margin="0,0,0,8"/>
                                         <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                             <TextBlock Style="{StaticResource FieldLabel}" Text="Group leftovers with the fallback when more than" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                             <TextBox Name="txtLooseThreshold" Text="15" Width="50" VerticalAlignment="Center"/>
@@ -590,8 +614,8 @@
                                             <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
                                             <ComboBoxItem Content="Level" Tag="Level"/>
                                             <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
-                                            <ComboBoxItem Content="Selection A (First Element)" Tag="SelectionA"/>
-                                            <ComboBoxItem Content="Selection B (Last Element)" Tag="SelectionB"/>
+                                            <ComboBoxItem Content="Selection A (search set)" Tag="SelectionA"/>
+                                            <ComboBoxItem Content="Selection B (search set)" Tag="SelectionB"/>
                                             <ComboBoxItem Content="Model A" Tag="ModelA"/>
                                             <ComboBoxItem Content="Model B" Tag="ModelB"/>
                                             <ComboBoxItem Content="Status" Tag="Status"/>
@@ -609,8 +633,8 @@
                                             <ComboBoxItem Content="None" Tag="None" IsSelected="True"/>
                                             <ComboBoxItem Content="Level" Tag="Level"/>
                                             <ComboBoxItem Content="Grid Intersection" Tag="GridIntersection"/>
-                                            <ComboBoxItem Content="Selection A" Tag="SelectionA"/>
-                                            <ComboBoxItem Content="Selection B" Tag="SelectionB"/>
+                                            <ComboBoxItem Content="Selection A (search set)" Tag="SelectionA"/>
+                                            <ComboBoxItem Content="Selection B (search set)" Tag="SelectionB"/>
                                             <ComboBoxItem Content="Model A" Tag="ModelA"/>
                                             <ComboBoxItem Content="Model B" Tag="ModelB"/>
                                             <ComboBoxItem Content="Status" Tag="Status"/>

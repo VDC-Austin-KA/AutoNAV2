@@ -28,6 +28,7 @@ WPF_TYPES = {
     "Window": "System.Windows.Window",
     "Grid": "System.Windows.Controls.Grid",
     "StackPanel": "System.Windows.Controls.StackPanel",
+    "WrapPanel": "System.Windows.Controls.WrapPanel",
     "DockPanel": "System.Windows.Controls.DockPanel",
     "Border": "System.Windows.Controls.Border",
     "TextBlock": "System.Windows.Controls.TextBlock",
