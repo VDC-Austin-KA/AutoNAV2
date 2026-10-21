@@ -252,6 +252,168 @@ namespace AutoNAV
         }
 
         // ─────────────────────────────────────────────────────────────
+        // Group Clashes tab — default grouping for one test
+        //
+        //   1. Existing groups are kept as they are.  "Walls" / "Floors" groups
+        //      are only broken up when regroupWallsFloors is set.
+        //   2. Walls / Floors first: loose clashes touching a Walls or Floors
+        //      search set of the test's disciplines join the "Walls" / "Floors"
+        //      groups (merged into existing ones).
+        //   3. The rest are grouped by nearest grid intersection (level + area)
+        //      and the pair of search sets that actually clashed, and named with
+        //      primaryTemplate.  Single clashes and clashes with no grid
+        //      intersection stay loose.
+        //   4. If more than looseThreshold clashes are still loose, they are
+        //      grouped by clashed set pair alone and named with
+        //      fallbackTemplate (no level / area needed).
+        //
+        //   primaryTemplate null = Walls / Floors only (Function 5).
+        //   statuses limits which loose clashes are grouped (null = all).
+        // ─────────────────────────────────────────────────────────────
+        public sealed class GroupingSummary
+        {
+            public int Walls, Floors, Located, LocatedGroups, Fallback, FallbackGroups, Loose;
+        }
+
+        public static GroupingSummary GroupTestDefault(
+            ClashTest test,
+            string primaryTemplate,
+            string fallbackTemplate,
+            int looseThreshold,
+            bool regroupWallsFloors,
+            ISet<ClashResultStatus> statuses,
+            Dictionary<string, Dictionary<string, HashSet<ModelItem>>> disciplineMap)
+        {
+            var sum = new GroupingSummary();
+            ResetNamingCaches();
+
+            var kept   = new List<ClashResultGroup>();
+            var wf     = new Dictionary<string, ClashResultGroup>(StringComparer.OrdinalIgnoreCase);
+            var loose  = new List<ClashResult>();
+            var asIs   = new List<ClashResult>();   // loose clashes outside the status filter
+
+            foreach (SavedItem child in test.Children)
+            {
+                if (child is ClashResultGroup g)
+                {
+                    string n = (g.DisplayName ?? "").Trim();
+                    bool isWF = n.Equals("Walls", StringComparison.OrdinalIgnoreCase)
+                             || n.Equals("Floors", StringComparison.OrdinalIgnoreCase);
+                    if (isWF && regroupWallsFloors)
+                    {
+                        loose.AddRange(Leaves(g).Select(cr => (ClashResult)cr.CreateCopy()));
+                        continue;
+                    }
+                    var copy = new ClashResultGroup { DisplayName = g.DisplayName };
+                    foreach (ClashResult cr in Leaves(g)) copy.Children.Add((ClashResult)cr.CreateCopy());
+                    if (isWF) wf[n] = copy; else kept.Add(copy);
+                }
+                else if (child is ClashResult cr)
+                {
+                    var c = (ClashResult)cr.CreateCopy();
+                    if (statuses == null || statuses.Contains(cr.Status)) loose.Add(c); else asIs.Add(c);
+                }
+            }
+
+            // 2. Walls / Floors
+            GroupByWallsAndFloorsViaSearchSets(loose, BuildSetMapForTest(test, disciplineMap),
+                out List<ClashResultGroup> wfNew, out List<ClashResult> rest);
+            foreach (var g in wfNew)
+            {
+                if (!wf.TryGetValue(g.DisplayName, out ClashResultGroup into))
+                    wf[g.DisplayName] = into = new ClashResultGroup { DisplayName = g.DisplayName };
+                foreach (ClashResult cr in Leaves(g))
+                {
+                    into.Children.Add((ClashResult)cr.CreateCopy());
+                    if (g.DisplayName.Equals("Walls", StringComparison.OrdinalIgnoreCase)) sum.Walls++; else sum.Floors++;
+                }
+            }
+
+            var groups = new List<ClashResultGroup>();
+            foreach (string n in new[] { "Walls", "Floors" })
+                if (wf.TryGetValue(n, out ClashResultGroup g) && g.Children.Count > 0) groups.Add(g);
+            groups.AddRange(kept);
+
+            if (primaryTemplate == null)
+            {
+                sum.Loose = rest.Count + asIs.Count;
+                ProcessClashGroup(groups, rest.Concat(asIs).ToList(), test);
+                return sum;
+            }
+
+            // 3. Grid intersection + clashed set pair
+            var mapA = BuildSelectionMembershipMap(test, true);
+            var mapB = BuildSelectionMembershipMap(test, false);
+            GridSystem gsys = null;
+            try { gsys = Application.MainDocument.Grids?.ActiveSystem; } catch { }
+
+            var located  = new Dictionary<string, ClashResultGroup>();
+            var leftover = new List<ClashResult>();
+            foreach (ClashResult cr in rest)
+            {
+                GridIntersection gi = null;
+                try { gi = gsys?.ClosestIntersection(cr.Center); } catch { }
+                if (gi == null) { leftover.Add(cr); continue; }
+                string key = (gi.Level?.DisplayName ?? "") + "|" + gi.DisplayName + "|" + PairKey(cr, mapA, mapB);
+                if (!located.TryGetValue(key, out ClashResultGroup g))
+                    located[key] = g = new ClashResultGroup { DisplayName = "" };
+                g.Children.Add(cr);
+            }
+            var locatedGroups = located.Values.Where(g => g.Children.Count > 1).ToList();
+            foreach (var g in located.Values.Where(g => g.Children.Count == 1))
+                leftover.Add((ClashResult)g.Children[0].CreateCopy());
+            groups.AddRange(ApplyTemplateToGroups(locatedGroups, test, primaryTemplate));
+            sum.LocatedGroups = locatedGroups.Count;
+            sum.Located = locatedGroups.Sum(g => g.Children.Count);
+
+            // 4. Too many loose clashes left: group them by clashed set pair.
+            if (leftover.Count > looseThreshold && !string.IsNullOrWhiteSpace(fallbackTemplate))
+            {
+                var byPair = new Dictionary<string, ClashResultGroup>();
+                foreach (ClashResult cr in leftover)
+                {
+                    string key = PairKey(cr, mapA, mapB);
+                    if (!byPair.TryGetValue(key, out ClashResultGroup g))
+                        byPair[key] = g = new ClashResultGroup { DisplayName = "" };
+                    g.Children.Add((ClashResult)cr.CreateCopy());
+                }
+                groups.AddRange(ApplyTemplateToGroups(byPair.Values.ToList(), test, fallbackTemplate));
+                sum.FallbackGroups = byPair.Count;
+                sum.Fallback = leftover.Count;
+                leftover.Clear();
+            }
+
+            sum.Loose = leftover.Count + asIs.Count;
+            ProcessClashGroup(groups, leftover.Concat(asIs).ToList(), test);
+            return sum;
+        }
+
+        // Builds the per-discipline Walls / Floors item map GroupTestDefault needs
+        // (once per run, shared by every test).
+        public static Dictionary<string, Dictionary<string, HashSet<ModelItem>>> BuildWallsFloorsMap(Document doc) =>
+            BuildDisciplineWallsFloorsMap(doc);
+
+        // "Framing vs SA Duct": the search sets the two clashed items belong to.
+        private static string PairKey(ClashResult cr, Dictionary<ModelItem, string> mapA, Dictionary<ModelItem, string> mapB)
+        {
+            ModelItem a = null, b = null;
+            try { a = cr.CompositeItem1; } catch { }
+            try { b = cr.CompositeItem2; } catch { }
+            return (LookupSetName(a, mapA) ?? "") + " vs " + (LookupSetName(b, mapB) ?? "");
+        }
+
+        // Every clash in a group, nested groups included.
+        private static IEnumerable<ClashResult> Leaves(ClashResultGroup g)
+        {
+            foreach (SavedItem c in g.Children)
+            {
+                if (c is ClashResult cr) yield return cr;
+                else if (c is ClashResultGroup nested)
+                    foreach (ClashResult n in Leaves(nested)) yield return n;
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
         // Function 6 — Group ALL tests by Walls / Floors via search sets
         // Returns a formatted summary string for the result dialog.
         //
@@ -295,28 +457,15 @@ namespace AutoNAV
                 {
                     try
                     {
-                        var all = GetIndividualClashResults(test, false).ToList();
-                        if (all.Count == 0) { testsSkipped++; continue; }
+                        if (test.Children.Count == 0) { testsSkipped++; continue; }
 
-                        // Scope search sets to this test's disciplines only
-                        var setMap = BuildSetMapForTest(test, disciplineMap);
+                        // Loose clashes only: existing groups (other Walls /
+                        // Floors work, proximity groups, manual groups) are kept.
+                        var sum = GroupTestDefault(test, null, null, int.MaxValue, false, null, disciplineMap);
 
-                        GroupByWallsAndFloorsViaSearchSets(all, setMap,
-                            out List<ClashResultGroup> groups,
-                            out List<ClashResult> ungrouped);
-
-                        int w = groups
-                            .Where(g => g.DisplayName.StartsWith("Walls",  StringComparison.OrdinalIgnoreCase))
-                            .Sum(g => g.Children.Count);
-                        int f = groups
-                            .Where(g => g.DisplayName.StartsWith("Floors", StringComparison.OrdinalIgnoreCase))
-                            .Sum(g => g.Children.Count);
-
-                        ProcessClashGroup(groups, ungrouped, test);
-
-                        wallsTotal  += w;
-                        floorsTotal += f;
-                        otherTotal  += ungrouped.Count;
+                        wallsTotal  += sum.Walls;
+                        floorsTotal += sum.Floors;
+                        otherTotal  += sum.Loose;
                         testsProcessed++;
                     }
                     catch (Exception ex)
@@ -331,7 +480,7 @@ namespace AutoNAV
                     "Tests skipped   : {1}  (no results)\n\n" +
                     "Grouped as Walls  : {2}\n" +
                     "Grouped as Floors : {3}\n" +
-                    "Left ungrouped    : {4}  (ready for Sherlock Distill)\n",
+                    "Still loose       : {4}  (existing groups were kept)\n",
                     testsProcessed, testsSkipped, wallsTotal, floorsTotal, otherTotal);
 
                 if (errorLog.Count > 0)
@@ -1206,7 +1355,9 @@ namespace AutoNAV
 
         private static List<ClashResultGroup> GroupByLevel(List<ClashResult> results, string initialName)
         {
-            GridSystem gridSystem = Application.MainDocument.Grids.ActiveSystem;
+            // Null when no model has grids (e.g. some cloud / SVF models): every
+            // clash then lands in the "No Level" / "No Grid intersection" group.
+            GridSystem gridSystem = Application.MainDocument.Grids?.ActiveSystem;
             Dictionary<GridLevel, ClashResultGroup> groups = new Dictionary<GridLevel, ClashResultGroup>();
 
             ClashResultGroup nullGridGroup = new ClashResultGroup { DisplayName = initialName + "No Level" };
@@ -1214,7 +1365,7 @@ namespace AutoNAV
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
-                GridIntersection closest = gridSystem.ClosestIntersection(copy.Center);
+                GridIntersection closest = gridSystem?.ClosestIntersection(copy.Center);
                 if (closest != null)
                 {
                     GridLevel level = closest.Level;
@@ -1240,7 +1391,9 @@ namespace AutoNAV
 
         private static List<ClashResultGroup> GroupByGridIntersection(List<ClashResult> results, string initialName)
         {
-            GridSystem gridSystem = Application.MainDocument.Grids.ActiveSystem;
+            // Null when no model has grids (e.g. some cloud / SVF models): every
+            // clash then lands in the "No Level" / "No Grid intersection" group.
+            GridSystem gridSystem = Application.MainDocument.Grids?.ActiveSystem;
             Dictionary<GridIntersection, ClashResultGroup> groups = new Dictionary<GridIntersection, ClashResultGroup>();
 
             ClashResultGroup nullGroup = new ClashResultGroup { DisplayName = initialName + "No Grid intersection" };
@@ -1248,7 +1401,7 @@ namespace AutoNAV
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
-                GridIntersection gi = gridSystem.ClosestIntersection(copy.Center);
+                GridIntersection gi = gridSystem?.ClosestIntersection(copy.Center);
                 if (gi != null)
                 {
                     if (!groups.TryGetValue(gi, out ClashResultGroup g))
