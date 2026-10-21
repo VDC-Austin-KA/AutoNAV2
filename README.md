@@ -85,6 +85,18 @@ Six functions plus a one-button AutoNAVismate tab:
 | 7 | Manual / advanced grouping fallback with primary + sub-grouping mode dropdowns. |
 | **AutoNAVismate** | Single-button workflow runner that executes 1 → 2 → 4 → 5 → 6 with sensible defaults. |
 
+## Model sources
+
+AutoNAV is built around Navisworks exports (`.nwc`), and also works with:
+
+| Source | How AutoNAV handles it |
+|---|---|
+| `.nwc` / `.nwd` exports | Discipline sets are live search sets on the model name (unchanged). |
+| Native Revit (`.rvt`) appended directly | Same as `.nwc`: the `.rvt` extension is ignored when reading the discipline code. |
+| Cloud-hosted models (Autodesk Docs / Forma, incl. Model Coordination) | The discipline code is read from the model's Selection Tree name when its file is a GUID/URN cache file. If the tree name doesn't contain the code, the discipline set is saved as a fixed list of those models (Function 1's summary lists them; delete and re-run Function 1 to include models appended later). |
+
+Models opened from Model Coordination load Autodesk's cloud (SVF) representation, which has no **Element** tab ([Autodesk article](https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Revit-model-element-properties-appear-to-be-missing-in-Navisworks.html)). When Function 2's chosen property (e.g. *Element → System Abbreviation*) finds nothing, it looks for the same property under whichever tab holds it; category values such as "Revit Walls" are named "Walls" so Function 5 still finds Walls / Floors. Function 3 lists the properties those models actually have. Grid / level grouping puts clashes in "No Grid intersection" / "No Level" when the models carry no grids.
+
 ## For developers
 
 Source layout:

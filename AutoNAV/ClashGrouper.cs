@@ -1206,7 +1206,9 @@ namespace AutoNAV
 
         private static List<ClashResultGroup> GroupByLevel(List<ClashResult> results, string initialName)
         {
-            GridSystem gridSystem = Application.MainDocument.Grids.ActiveSystem;
+            // Null when no model has grids (e.g. some cloud / SVF models): every
+            // clash then lands in the "No Level" / "No Grid intersection" group.
+            GridSystem gridSystem = Application.MainDocument.Grids?.ActiveSystem;
             Dictionary<GridLevel, ClashResultGroup> groups = new Dictionary<GridLevel, ClashResultGroup>();
 
             ClashResultGroup nullGridGroup = new ClashResultGroup { DisplayName = initialName + "No Level" };
@@ -1214,7 +1216,7 @@ namespace AutoNAV
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
-                GridIntersection closest = gridSystem.ClosestIntersection(copy.Center);
+                GridIntersection closest = gridSystem?.ClosestIntersection(copy.Center);
                 if (closest != null)
                 {
                     GridLevel level = closest.Level;
@@ -1240,7 +1242,9 @@ namespace AutoNAV
 
         private static List<ClashResultGroup> GroupByGridIntersection(List<ClashResult> results, string initialName)
         {
-            GridSystem gridSystem = Application.MainDocument.Grids.ActiveSystem;
+            // Null when no model has grids (e.g. some cloud / SVF models): every
+            // clash then lands in the "No Level" / "No Grid intersection" group.
+            GridSystem gridSystem = Application.MainDocument.Grids?.ActiveSystem;
             Dictionary<GridIntersection, ClashResultGroup> groups = new Dictionary<GridIntersection, ClashResultGroup>();
 
             ClashResultGroup nullGroup = new ClashResultGroup { DisplayName = initialName + "No Grid intersection" };
@@ -1248,7 +1252,7 @@ namespace AutoNAV
             foreach (ClashResult result in results)
             {
                 ClashResult copy = (ClashResult)result.CreateCopy();
-                GridIntersection gi = gridSystem.ClosestIntersection(copy.Center);
+                GridIntersection gi = gridSystem?.ClosestIntersection(copy.Center);
                 if (gi != null)
                 {
                     if (!groups.TryGetValue(gi, out ClashResultGroup g))

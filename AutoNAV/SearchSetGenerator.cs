@@ -166,13 +166,13 @@ namespace AutoNAV
                     return;
                 }
 
-                // Collect all filenames (no extension) from loaded models
+                // Collect each loaded model's name (no extension). ModelNames
+                // prefers a recognisable name, so cloud-hosted models whose
+                // cache file is a GUID still classify by their real name.
                 var allFileNames = new List<string>();
                 for (int i = 0; i < models.Count; i++)
                 {
-                    Model  m    = models[i];
-                    string raw  = !string.IsNullOrEmpty(m.FileName) ? m.FileName : m.SourceFileName;
-                    string noExt = System.IO.Path.GetFileNameWithoutExtension(raw ?? "");
+                    string noExt = ModelNames.Display(models[i]);
                     if (!string.IsNullOrWhiteSpace(noExt))
                         allFileNames.Add(noExt);
                 }
@@ -303,13 +303,17 @@ namespace AutoNAV
                 // Existing set name → its search terms, so a name clash can be
                 // told apart from the very same set being created again.
                 var existing = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                // A fixed (model list) set has no terms to compare: null means
+                // "treat as the set from an earlier run".
                 foreach (SavedItem c in discFolder.Children)
-                    existing[c.DisplayName.Trim()] = GetSearchPatternsFromSet(c as SelectionSet);
+                    existing[c.DisplayName.Trim()] = ModelNames.IsFixedSet(c as SelectionSet)
+                        ? null : GetSearchPatternsFromSet(c as SelectionSet);
 
                 int created = 0;
                 int skipped = 0;
                 var errors = new List<string>();
                 var createdNames = new List<string>();
+                var fixedNames = new List<string>();
 
                 foreach (var entry in patternEntries)
                 {
@@ -324,7 +328,7 @@ namespace AutoNAV
                     bool alreadyPresent = false;
                     for (int n = 2; existing.TryGetValue(displayName, out List<string> existingTerms); n++)
                     {
-                        if (SameTerms(existingTerms, terms)) { alreadyPresent = true; break; }
+                        if (existingTerms == null || SameTerms(existingTerms, terms)) { alreadyPresent = true; break; }
                         displayName = entry.DisplayName + n;
                     }
 
@@ -341,17 +345,32 @@ namespace AutoNAV
 
                     try
                     {
-                        var search = new Search();
-                        search.Locations = SearchLocations.DescendantsAndSelf;
-                        search.Selection.SelectAll();
-                        foreach (string term in terms)
+                        // A name search finds a model by its Selection Tree name.
+                        // Cloud-hosted models can show a tree name without the
+                        // code their file name matched on, so the search would
+                        // select nothing: save those models as a fixed set instead.
+                        List<Model> matched = FindModelsForDiscipline(doc, terms);
+                        SelectionSet ss;
+                        if (matched.Count > 0 && !matched.All(m => ModelNames.RootNameHasAll(m, terms)))
                         {
-                            search.SearchConditions.Add(
-                                SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
-                                    .DisplayStringContains(term));
+                            var roots = new ModelItemCollection();
+                            foreach (Model m in matched) roots.Add(m.RootItem);
+                            ss = new SelectionSet(roots) { DisplayName = displayName };
+                            fixedNames.Add(displayName);
                         }
-
-                        var ss = new SelectionSet(search) { DisplayName = displayName };
+                        else
+                        {
+                            var search = new Search();
+                            search.Locations = SearchLocations.DescendantsAndSelf;
+                            search.Selection.SelectAll();
+                            foreach (string term in terms)
+                            {
+                                search.SearchConditions.Add(
+                                    SearchCondition.HasPropertyByName("LcOaNode", "LcOaSceneBaseUserName")
+                                        .DisplayStringContains(term));
+                            }
+                            ss = new SelectionSet(search) { DisplayName = displayName };
+                        }
 
                         selSets.AddCopy(discFolder, ss);
                         existing[displayName] = terms;
@@ -372,6 +391,10 @@ namespace AutoNAV
 
                 if (createdNames.Count > 0)
                     msg += "\n\nCreated: " + string.Join(", ", createdNames);
+                if (fixedNames.Count > 0)
+                    msg += "\n\nSaved as fixed model lists (their Selection Tree names don't contain the discipline code, " +
+                           "as with some cloud-hosted models): " + string.Join(", ", fixedNames) +
+                           "\nTo include models appended later, delete these sets and run Function 1 again.";
                 if (patternEntries.Count > 0)
                     msg += "\n\nPatterns: " + string.Join(", ", patternEntries.Select(p => p.Pattern + (p.Level != null ? "+" + p.Level : "")));
 
@@ -521,8 +544,11 @@ namespace AutoNAV
                             searchPattern = extracted;
                     }
 
-                    // Find all models whose filename contains this discipline pattern
-                    List<Model> discModels = FindModelsForDiscipline(doc, searchPattern);
+                    // Find the discipline's models: straight from a fixed set,
+                    // otherwise by name.
+                    List<Model> discModels = ModelNames.IsFixedSet(discSearchSet as SelectionSet)
+                        ? ModelNames.ModelsInFixedSet(doc, (SelectionSet)discSearchSet)
+                        : FindModelsForDiscipline(doc, searchPattern);
                     if (discModels.Count == 0)
                     {
                         errors.Add(string.Format("'{0}': no matching model files found", discipline));
@@ -530,10 +556,24 @@ namespace AutoNAV
                     }
 
                     // Enumerate unique property values from those models
-                    List<string> values = EnumeratePropertyValuesFromModels(discModels, propCat, propName);
+                    string cat = propCat;
+                    List<string> values = EnumeratePropertyValuesFromModels(discModels, cat, propName);
                     if (values.Count == 0)
                     {
-                        errors.Add(string.Format("'{0}': no '{1}/{2}' values found", discipline, propCat, propName));
+                        // Cloud models opened from Model Coordination (SVF) have no
+                        // "Element" tab; their Revit parameters sit under the web
+                        // viewer's groups. Use whichever tab holds the property.
+                        string found = FindCategoryWithProperty(discModels, propName, propCat);
+                        if (found != null)
+                        {
+                            cat = found;
+                            values = EnumeratePropertyValuesFromModels(discModels, cat, propName);
+                        }
+                    }
+                    if (values.Count == 0)
+                    {
+                        errors.Add(string.Format("'{0}': no '{1}/{2}' values found (Function 3 lists the properties these models do have)",
+                            discipline, propCat, propName));
                         continue;
                     }
 
@@ -553,7 +593,11 @@ namespace AutoNAV
                         // multiLevel: discipline is already the Function-1 name
                         // "L01-ARCH", so prefixing it yields "L01-ARCH-Walls"
                         // with no separate level parsing needed.
-                        string setName = multiLevel ? (discipline + "-" + value) : value;
+                        // SVF category values read "Revit Walls"; name the set
+                        // "Walls" so Function 5 still finds Walls / Floors.
+                        string label = cat != propCat && value.StartsWith("Revit ", StringComparison.OrdinalIgnoreCase)
+                            ? value.Substring(6) : value;
+                        string setName = multiLevel ? (discipline + "-" + label) : label;
 
                         root        = doc.SelectionSets.RootItem as GroupItem;
                         clashFolder = FindFolder(root, CLASH_SETS_FOLDER);
@@ -573,7 +617,7 @@ namespace AutoNAV
                             search.Selection.SelectionSources.Add(discSource);
 
                             search.SearchConditions.Add(
-                                SearchCondition.HasPropertyByDisplayName(propCat, propName)
+                                SearchCondition.HasPropertyByDisplayName(cat, propName)
                                     .EqualValue(VariantData.FromDisplayString(value)));
 
                             var ss = new SelectionSet(search) { DisplayName = setName };
@@ -1053,21 +1097,17 @@ namespace AutoNAV
             return result;
         }
 
-        private static string ModelFileName(Model m)
-        {
-            string raw = !string.IsNullOrEmpty(m.FileName) ? m.FileName : m.SourceFileName;
-            return System.IO.Path.GetFileNameWithoutExtension(raw ?? "");
-        }
+        private static string ModelFileName(Model m) => ModelNames.Display(m);
 
-        // Return all models whose filename contains every one of the patterns.
+        // Return all models with a name (file or Selection Tree) that contains
+        // every one of the patterns.
         private static List<Model> FindModelsForDiscipline(Document doc, List<string> patterns)
         {
             var result = new List<Model>();
             for (int i = 0; i < doc.Models.Count; i++)
             {
-                Model  m         = doc.Models[i];
-                string fileNoExt = ModelFileName(m);
-                if (patterns.All(p => fileNoExt.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0))
+                Model m = doc.Models[i];
+                if (ModelNames.Matches(m, patterns))
                     result.Add(m);
             }
             return result;
@@ -1079,6 +1119,8 @@ namespace AutoNAV
         // it also works when the set was renamed away from its pattern.
         private static List<Model> ModelsForDisciplineSet(Document doc, SavedItem discSet, string discipline)
         {
+            if (ModelNames.IsFixedSet(discSet as SelectionSet))
+                return ModelNames.ModelsInFixedSet(doc, (SelectionSet)discSet);
             var patterns = GetSearchPatternsFromSet(discSet as SelectionSet);
             if (patterns.Count == 0) patterns.Add(discipline);
             List<Model> models = FindModelsForDiscipline(doc, patterns);
@@ -1399,20 +1441,10 @@ namespace AutoNAV
             return null;
         }
 
-        // Return all models whose filename contains the given search pattern.
-        private static List<Model> FindModelsForDiscipline(Document doc, string searchPattern)
-        {
-            var result = new List<Model>();
-            for (int i = 0; i < doc.Models.Count; i++)
-            {
-                Model  m        = doc.Models[i];
-                string raw      = !string.IsNullOrEmpty(m.FileName) ? m.FileName : m.SourceFileName;
-                string fileNoExt = System.IO.Path.GetFileNameWithoutExtension(raw ?? "");
-                if (fileNoExt.IndexOf(searchPattern, StringComparison.OrdinalIgnoreCase) >= 0)
-                    result.Add(m);
-            }
-            return result;
-        }
+        // Return all models with a name (file or Selection Tree) that contains
+        // the given search pattern.
+        private static List<Model> FindModelsForDiscipline(Document doc, string searchPattern) =>
+            FindModelsForDiscipline(doc, new List<string> { searchPattern });
 
         // Enumerate unique property values from elements across a list of models.
         private static List<string> EnumeratePropertyValuesFromModels(
@@ -1439,6 +1471,32 @@ namespace AutoNAV
         }
 
         // Recursive depth-first property value collector.
+        // The tab (other than the one already tried) under which the property
+        // appears most often across the first items of these models, or null.
+        private static string FindCategoryWithProperty(List<Model> models, string propName, string exceptCat)
+        {
+            var hits = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            int seen = 0;
+            void Walk(ModelItem item)
+            {
+                if (item == null || seen >= 20000) return;
+                seen++;
+                try
+                {
+                    foreach (PropertyCategory cat in item.PropertyCategories)
+                    {
+                        if (cat.DisplayName == null || cat.DisplayName.Equals(exceptCat, StringComparison.OrdinalIgnoreCase)) continue;
+                        if (cat.Properties.Any(pr => string.Equals(pr.DisplayName, propName, StringComparison.OrdinalIgnoreCase)))
+                            hits[cat.DisplayName] = hits.TryGetValue(cat.DisplayName, out int n) ? n + 1 : 1;
+                    }
+                    foreach (ModelItem child in item.Children) Walk(child);
+                }
+                catch { }
+            }
+            foreach (Model m in models) Walk(m.RootItem);
+            return hits.Count == 0 ? null : hits.OrderByDescending(h => h.Value).First().Key;
+        }
+
         private static void CollectPropertyValues(
             ModelItem item, string propCat, string propName,
             HashSet<string> values, ref int count, int maxItems)
