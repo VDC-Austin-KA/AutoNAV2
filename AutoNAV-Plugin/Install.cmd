@@ -1,9 +1,10 @@
 @echo off
 :: AutoNAV plugin installer (pure CMD, nothing embedded).
 ::
-:: This .cmd does ONLY `mkdir` and `copy` -- the same things you'd do
-:: manually in File Explorer -- so it doesn't trip the heuristics that
-:: Defender / SmartScreen use for "self-extracting installer" patterns.
+:: This .cmd does ONLY `mkdir`, `copy` and `rmdir` of old AutoNAV copies --
+:: the same things you'd do manually in File Explorer -- so it doesn't trip
+:: the heuristics that Defender / SmartScreen use for "self-extracting
+:: installer" patterns.
 ::
 :: The DLLs and addin files live in the V24/ V25/ V26/ V27/ subfolders
 :: next to this file.  Keep them together.
@@ -23,7 +24,7 @@ if errorlevel 1 (
 
 echo.
 echo ===============================================================================
-echo               AutoNAV plugin installer (v3.18.0)
+echo               AutoNAV plugin installer (v3.19.0)
 echo       Targets: Navisworks Manage 2024 / 2025 / 2026 / 2027
 echo ===============================================================================
 echo.
@@ -34,6 +35,17 @@ if not errorlevel 1 (
     echo  Closing Navisworks...
     taskkill /F /IM Roamer.exe >nul 2>&1
     timeout /t 2 /nobreak >nul
+)
+
+REM Remove AutoNAV copies left by earlier installers. Navisworks also loads
+REM plugins from these folders, and an old copy there gets loaded instead
+REM of the one in Program Files.
+call :RemoveStale "%ProgramData%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+call :RemoveStale "%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+for %%Y in (2024 2025 2026 2027) do (
+    call :RemoveStale "%ProgramData%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
+    call :RemoveStale "%APPDATA%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
+    call :RemoveStale "%LOCALAPPDATA%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
 )
 
 set "INSTALLED="
@@ -82,4 +94,15 @@ copy /Y "%SRC%\%SUB%\AutoNAV.addin" "%DEST%\AutoNAV.addin" >nul
 
 echo  [+] Navisworks Manage %YEAR% -- installed to %DEST%
 set "INSTALLED=!INSTALLED! %YEAR%"
+exit /b 0
+
+:RemoveStale
+if not exist "%~1\" exit /b 0
+rmdir /S /Q "%~1" >nul 2>&1
+if exist "%~1\" (
+    echo  [!!] Could not remove old copy: %~1
+) else (
+    echo  [-] Removed old copy: %~1
+    set "STALE=1"
+)
 exit /b 0

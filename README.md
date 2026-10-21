@@ -42,6 +42,7 @@ Restart Navisworks. Done.
 Both methods perform the same install. Windows will prompt for administrator rights (the installer writes into `C:\Program Files\Autodesk\…`). Accept, and the script will:
 
 1. Close Navisworks if it's running.
+1. Remove AutoNAV copies left by earlier installers (`%ProgramData%` / `%APPDATA%` `Autodesk\ApplicationPlugins\AutoNAV.bundle`, and `Plugins\AutoNAV` under `%ProgramData%`, `%APPDATA%` and `%LOCALAPPDATA%` `\Autodesk\Navisworks Manage <year>`). Navisworks loads plugins from those folders too, so an old copy there would be loaded instead of the new one. The AutoNAV window header shows the version that actually loaded.
 2. For every detected Navisworks Manage 2024 / 2025 / 2026 / 2027 install, drop the matching `AutoNAV.dll` + `AutoNAV.addin` into `C:\Program Files\Autodesk\Navisworks Manage <year>\Plugins\AutoNAV\`.
 3. Back up any prior install (`AutoNAV-Setup.exe` → `*.backup` files; `.ps1` → `Backup_<timestamp>\` folder).
 4. Print a per-year status summary.

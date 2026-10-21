@@ -30,6 +30,17 @@ for %%Y in (2024 2025 2026 2027) do (
     )
 )
 
+REM Copies left by earlier installers too.
+call :RemoveStale "%ProgramData%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+call :RemoveStale "%APPDATA%\Autodesk\ApplicationPlugins\AutoNAV.bundle"
+for %%Y in (2024 2025 2026 2027) do (
+    call :RemoveStale "%ProgramData%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
+    call :RemoveStale "%APPDATA%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
+    call :RemoveStale "%LOCALAPPDATA%\Autodesk\Navisworks Manage %%Y\Plugins\AutoNAV"
+)
+
+if defined STALE set "REMOVED=!REMOVED! (plus old copies)"
+
 if defined REMOVED (
     echo.
     echo  Removed from: Navisworks Manage !REMOVED!
@@ -38,3 +49,15 @@ if defined REMOVED (
 )
 echo.
 pause
+exit /b 0
+
+:RemoveStale
+if not exist "%~1\" exit /b 0
+rmdir /S /Q "%~1" >nul 2>&1
+if exist "%~1\" (
+    echo  [!!] Could not remove old copy: %~1
+) else (
+    echo  [-] Removed old copy: %~1
+    set "STALE=1"
+)
+exit /b 0
