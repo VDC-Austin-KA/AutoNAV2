@@ -24,7 +24,7 @@ if errorlevel 1 (
 
 echo.
 echo ===============================================================================
-echo               AutoNAV plugin installer (v3.19.0)
+echo               AutoNAV plugin installer (v3.20.0)
 echo       Targets: Navisworks Manage 2024 / 2025 / 2026 / 2027
 echo ===============================================================================
 echo.

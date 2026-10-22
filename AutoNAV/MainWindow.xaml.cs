@@ -660,7 +660,7 @@ namespace AutoNAV
                 }
 
                 string summary = GroupTestsWithDefaults(tests, template, txtFallbackTemplate.Text,
-                    ReadLooseThreshold(), chkRegroupWallsFloors.IsChecked == true, newStatuses);
+                    ReadLooseThreshold(), chkRegroupWallsFloors.IsChecked == true, newStatuses, ReadClusterDistance());
                 NotifyResult("Group Clashes", summary);
             }
             catch (Exception ex)
@@ -671,7 +671,8 @@ namespace AutoNAV
 
         // Shared by the Group Clashes tab and AutoNAVismate.
         private static string GroupTestsWithDefaults(List<ClashTest> tests, string template, string fallbackTemplate,
-            int looseThreshold, bool regroupWallsFloors, ISet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> statuses)
+            int looseThreshold, bool regroupWallsFloors, ISet<Autodesk.Navisworks.Api.Clash.ClashResultStatus> statuses,
+            double clusterDistance)
         {
             var wfMap = ClashGrouper.BuildWallsFloorsMap(NavApp.ActiveDocument);
             var lines = new List<string>();
@@ -681,9 +682,9 @@ namespace AutoNAV
                 try
                 {
                     var r = ClashGrouper.GroupTestDefault(test, template, fallbackTemplate, looseThreshold,
-                                                          regroupWallsFloors, statuses, wfMap);
+                                                          regroupWallsFloors, statuses, wfMap, clusterDistance);
                     lines.Add($"{test.DisplayName}: Walls {r.Walls}, Floors {r.Floors}, " +
-                              $"by location {r.Located} in {r.LocatedGroups} group(s), " +
+                              $"grouped {r.Located} in {r.LocatedGroups} group(s), " +
                               $"fallback {r.Fallback} in {r.FallbackGroups} group(s), loose {r.Loose}");
                 }
                 catch (Exception ex)
@@ -695,6 +696,18 @@ namespace AutoNAV
             return $"Grouped {tests.Count - failed} test(s), {failed} failed.\n" +
                    $"Template: {template}\nFallback (> {looseThreshold} loose): {fallbackTemplate}\n\n" +
                    string.Join("\n", lines);
+        }
+
+        // Cluster distance in model units, or -1 for the Strict method.
+        private double ReadClusterDistance()
+        {
+            if (((cmbGroupingMethod?.SelectedItem as ComboBoxItem)?.Tag as string) == "strict") return -1;
+            double d = double.TryParse(txtClusterDistance?.Text?.Trim(), System.Globalization.NumberStyles.Float,
+                                       System.Globalization.CultureInfo.CurrentCulture, out double v) && v >= 0 ? v : 5;
+            var from = ((cmbClusterUnits?.SelectedItem as ComboBoxItem)?.Tag as string) == "m"
+                ? Autodesk.Navisworks.Api.Units.Meters : Autodesk.Navisworks.Api.Units.Feet;
+            var doc = NavApp.ActiveDocument;
+            return doc == null ? d : d * Autodesk.Navisworks.Api.UnitConversion.ScaleFactor(from, doc.Units);
         }
 
         private int ReadLooseThreshold() =>
@@ -1165,7 +1178,7 @@ namespace AutoNAV
                         Autodesk.Navisworks.Api.Clash.ClashResultStatus.Reviewed,
                     };
                     NotifyResult("Group Clashes", GroupTestsWithDefaults(tests, template, txtFallbackTemplate.Text,
-                        ReadLooseThreshold(), false, statuses));
+                        ReadLooseThreshold(), false, statuses, ReadClusterDistance()));
                 }
                 catch (Exception ex)
                 {

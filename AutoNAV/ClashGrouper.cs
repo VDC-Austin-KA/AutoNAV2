@@ -282,7 +282,8 @@ namespace AutoNAV
             int looseThreshold,
             bool regroupWallsFloors,
             ISet<ClashResultStatus> statuses,
-            Dictionary<string, Dictionary<string, HashSet<ModelItem>>> disciplineMap)
+            Dictionary<string, Dictionary<string, HashSet<ModelItem>>> disciplineMap,
+            double clusterDistance = -1)
         {
             var sum = new GroupingSummary();
             ResetNamingCaches();
@@ -341,27 +342,61 @@ namespace AutoNAV
                 return sum;
             }
 
-            // 3. Grid intersection + clashed set pair
+            // 3. Group the rest.
+            //    Cluster (clusterDistance >= 0): clashes sharing a clashed element,
+            //    or within clusterDistance of each other, any system - see
+            //    ClashClusters.  Strict (clusterDistance < 0): same grid
+            //    intersection and same clashed search-set pair.
             var mapA = BuildSelectionMembershipMap(test, true);
             var mapB = BuildSelectionMembershipMap(test, false);
             GridSystem gsys = null;
             try { gsys = Application.MainDocument.Grids?.ActiveSystem; } catch { }
-
-            var located  = new Dictionary<string, ClashResultGroup>();
-            var leftover = new List<ClashResult>();
-            foreach (ClashResult cr in rest)
+            GridIntersection GridAt(ClashResult cr)
             {
-                GridIntersection gi = null;
-                try { gi = gsys?.ClosestIntersection(cr.Center); } catch { }
-                if (gi == null) { leftover.Add(cr); continue; }
-                string key = (gi.Level?.DisplayName ?? "") + "|" + gi.DisplayName + "|" + PairKey(cr, mapA, mapB);
-                if (!located.TryGetValue(key, out ClashResultGroup g))
-                    located[key] = g = new ClashResultGroup { DisplayName = "" };
-                g.Children.Add(cr);
+                try { return gsys?.ClosestIntersection(cr.Center); } catch { return null; }
             }
-            var locatedGroups = located.Values.Where(g => g.Children.Count > 1).ToList();
-            foreach (var g in located.Values.Where(g => g.Children.Count == 1))
-                leftover.Add((ClashResult)g.Children[0].CreateCopy());
+
+            var leftover = new List<ClashResult>();
+            List<ClashResultGroup> locatedGroups;
+            if (clusterDistance >= 0)
+            {
+                var pts = new List<ClashClusters.Point>();
+                foreach (ClashResult cr in rest)
+                {
+                    ModelItem a = null, b = null;
+                    try { a = GetSignificantAncestorOrSelf(cr.CompositeItem1); } catch { }
+                    try { b = GetSignificantAncestorOrSelf(cr.CompositeItem2); } catch { }
+                    var c = cr.Center;
+                    pts.Add(new ClashClusters.Point { ElementA = a, ElementB = b, X = c.X, Y = c.Y, Z = c.Z });
+                }
+                locatedGroups = new List<ClashResultGroup>();
+                foreach (List<int> cluster in ClashClusters.Build(pts, clusterDistance))
+                {
+                    if (cluster.Count == 1) { leftover.Add(rest[cluster[0]]); continue; }
+                    // The group is named from its first clash: put one that has a
+                    // grid intersection first so {Level} / {Area} can be filled.
+                    var members = cluster.Select(i => rest[i]).OrderBy(cr => GridAt(cr) == null ? 1 : 0).ToList();
+                    var g = new ClashResultGroup { DisplayName = "" };
+                    foreach (ClashResult cr in members) g.Children.Add(cr);
+                    locatedGroups.Add(g);
+                }
+            }
+            else
+            {
+                var located = new Dictionary<string, ClashResultGroup>();
+                foreach (ClashResult cr in rest)
+                {
+                    GridIntersection gi = GridAt(cr);
+                    if (gi == null) { leftover.Add(cr); continue; }
+                    string key = (gi.Level?.DisplayName ?? "") + "|" + gi.DisplayName + "|" + PairKey(cr, mapA, mapB);
+                    if (!located.TryGetValue(key, out ClashResultGroup g))
+                        located[key] = g = new ClashResultGroup { DisplayName = "" };
+                    g.Children.Add(cr);
+                }
+                locatedGroups = located.Values.Where(g => g.Children.Count > 1).ToList();
+                foreach (var g in located.Values.Where(g => g.Children.Count == 1))
+                    leftover.Add((ClashResult)g.Children[0].CreateCopy());
+            }
             groups.AddRange(ApplyTemplateToGroups(locatedGroups, test, primaryTemplate));
             sum.LocatedGroups = locatedGroups.Count;
             sum.Located = locatedGroups.Sum(g => g.Children.Count);
@@ -1262,7 +1297,26 @@ namespace AutoNAV
             var hits = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             CollectClashedSetNames(group, map, selectionA, hits, seen);
-            return string.Join(" + ", hits);
+            // At most three names in a title, the ones with the most clashes
+            // in the group first; every clash still stays in the group.
+            return string.Join(" + ", hits
+                .Select((n, i) => (n, i, count: CountClashesInSet(group, map, selectionA, n)))
+                .OrderByDescending(h => h.count).ThenBy(h => h.i)
+                .Take(MaxNamesInTitle).Select(h => h.n));
+        }
+
+        private const int MaxNamesInTitle = 3;
+
+        private static int CountClashesInSet(ClashResultGroup group, Dictionary<ModelItem, string> map, bool selectionA, string setName)
+        {
+            int n = 0;
+            foreach (ClashResult cr in Leaves(group))
+            {
+                ModelItem item = null;
+                try { item = selectionA ? cr.CompositeItem1 : cr.CompositeItem2; } catch { }
+                if (string.Equals(LookupSetName(item, map), setName, StringComparison.OrdinalIgnoreCase)) n++;
+            }
+            return n;
         }
 
         private static void CollectClashedSetNames(
