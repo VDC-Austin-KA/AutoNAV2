@@ -145,6 +145,7 @@
     <Compile Include="ClashGrouper.cs" />
     <Compile Include="ClashCompat.cs" />
     <Compile Include="ModelNames.cs" />
+    <Compile Include="ClashClusters.cs" />
     <Compile Include="UnknownDisciplineDialog.cs" />
     <Compile Include="Notifier.cs" />
   </ItemGroup>

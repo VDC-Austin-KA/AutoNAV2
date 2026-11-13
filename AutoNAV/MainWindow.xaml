@@ -521,6 +521,23 @@
                                                  GotFocus="OnTemplateBoxFocused" TextChanged="OnCustomNamingTemplateChanged"/>
                                         <TextBlock Name="txtNamingPreview" FontSize="11" Foreground="{StaticResource Primary}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,8"/>
 
+                                        <TextBlock Style="{StaticResource FieldLabel}" Text="Grouping method"/>
+                                        <ComboBox Name="cmbGroupingMethod" Margin="0,0,0,4">
+                                            <ComboBoxItem Content="Cluster — clashes that share an element (e.g. the same column) or are near each other, any system" Tag="cluster" IsSelected="True"/>
+                                            <ComboBoxItem Content="Strict — same grid intersection and same pair of search sets" Tag="strict"/>
+                                        </ComboBox>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="Cluster: also group clashes within" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBox Name="txtClusterDistance" Text="5" Width="50" VerticalAlignment="Center"/>
+                                            <ComboBox Name="cmbClusterUnits" Width="60" Margin="6,0,0,0" VerticalAlignment="Center">
+                                                <ComboBoxItem Content="ft" Tag="ft" IsSelected="True"/>
+                                                <ComboBoxItem Content="m" Tag="m"/>
+                                            </ComboBox>
+                                            <TextBlock Style="{StaticResource FieldLabel}" Text="of each other (0 = shared element only)" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                                                   Text="Group names list at most 3 search sets per side ({SelectionA} / {SelectionB}), the ones with the most clashes first; every clash stays in the group."/>
+
                                         <TextBlock Style="{StaticResource FieldLabel}" Text="Fallback template (used when too many clashes are left loose) — pick one or type your own"/>
                                         <ComboBox Name="txtFallbackTemplate" IsEditable="True" Margin="0,0,0,4" GotFocus="OnTemplateBoxFocused"
                                                   Text="{}{Month}/{Day}_{TestName} - {SelectionA} vs {SelectionB} {#}">
